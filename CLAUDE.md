@@ -520,19 +520,19 @@ docker compose exec web python restore_db.py
 
 **Task interactions**: All tasks clickable (HTMX `hx-get="/tasks/{id}/details"` → modal), buttons have `onclick="event.stopPropagation()"` to prevent modal on button clicks.
 
-## Current Status (2025-10-01 Phase 10 Week 2+ - Archival Complete, Ready to Commit)
+## Current Status (2025-10-01 Phase 10 Week 2+ Complete - All Archival Committed)
 
-**9.5/10 Architecture | 9.0/10 Production Readiness** | 62 committed bug fixes | 137/137 unit/integration (100%), 9/19 E2E (47%) | Zero pytest warnings | **Phase 10 Week 2+ committed (cb05f6e): Fixed #220-223. Uncommitted: Fixed #222 (audit archival). Manual dead file removal pending (#204)**
+**9.5/10 Architecture | 9.0/10 Production Readiness** | 62 committed bug fixes | 137/137 unit/integration (100%), 9/19 E2E (47%) | Zero pytest warnings | **Phase 10 Week 2+ COMPLETE (445e5d0): Fixed #220-223 + audit archival (#222). Manual dead file removal pending (#204)**
 
 **Achievement**: Zero global state, zero architectural debt, textbook clean architecture with proper DI, atomic DB constraints, comprehensive error handling, production-ready database migrations, full PostgreSQL support with connection pooling, structured logging with JSON output. **Ready for department-scale deployment (20-100 users)**.
 
-**Latest Commit** (cb05f6e): ✅ #220 PostgreSQL pool config (size=5, max_overflow=10, pre_ping). ✅ #221 GlobalContext.update() now uses get_or_create() for race safety. ✅ #223 Removed redundant db.refresh() in Settings.update().
+**Latest Commit** (445e5d0): ✅ #222 Audit table archival strategy - Added AUDIT_RETENTION_DAYS config (default 30 days), delete_old_records() methods in DSPyExecutionRepository and ChatRepository, cleanup_old_audit_records() background job (daily at 3 AM), 3 comprehensive tests. Prevents database bloat from unbounded audit table growth.
 
-**Uncommitted** (ready to commit): ✅ #222 Audit archival - Added AUDIT_RETENTION_DAYS config, delete_old_records() methods in DSPyExecutionRepository and ChatRepository, daily cleanup job at 3 AM. 3 new tests passing (137/137 total). Changes: config.py, repositories/dspy_execution_repository.py, repositories/chat_repository.py, schedule_checker.py, app.py, test_components.py.
+**Previous Commits**: cb05f6e (#220-223 PG pool, context race, redundant refresh), 2b46fc0 (structured logging), a3be530 (critical concurrency fixes #145-153 + Alembic + PostgreSQL)
 
-**Git Status**: 2 commits ahead of origin. Uncommitted changes: archival implementation (#222). ⚠️ Dead files require MANUAL removal: `rm alembic_env_temp.py alembic_migration_temp.py alembic_temp.ini app_new.py`
+**Git Status**: 3 commits ahead of origin (2b46fc0, cb05f6e, 445e5d0). Clean working directory. ⚠️ Dead files require MANUAL removal: `rm alembic_env_temp.py alembic_migration_temp.py alembic_temp.ini app_new.py`
 
-**Remaining**: 145 unique bugs (1 critical #115 | 3 high #57-59,#204 MANUAL | 20 medium #14,25-26,36,40-41,154-162,189-194 | 121 low) | **Next**: Commit #222 → ⚠️ **MANUAL**: `rm dead files` → Fix #189-194 backup (4-6h) → Observability (8-12h)
+**Remaining**: 145 unique bugs (1 critical #115 | 3 high #57-59,#204 MANUAL | 20 medium #14,25-26,36,40-41,154-162,189-194 | 121 low) | **Next**: ⚠️ **MANUAL**: `rm alembic_env_temp.py alembic_migration_temp.py alembic_temp.ini app_new.py` → Fix #189-194 backup/restore (4-6h) → Observability (8-12h)
 
 ---
 
