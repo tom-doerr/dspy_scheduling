@@ -4,7 +4,8 @@ from fastapi.responses import HTMLResponse
 import dspy
 from models import init_db
 from scheduler import PrioritizerModule, TimeSlotModule
-from schedule_checker import check_and_update_schedule, set_time_scheduler
+import schedule_checker
+from schedule_checker import ScheduleChecker
 from config import settings
 from datetime import datetime
 import logging
@@ -27,13 +28,15 @@ dspy.configure(lm=lm)
 prioritizer = PrioritizerModule()
 time_scheduler = TimeSlotModule()
 
-# Share time_scheduler with schedule_checker
-set_time_scheduler(time_scheduler)
+# Create schedule checker with dependency injection
+schedule_checker_instance = ScheduleChecker(time_scheduler)
+schedule_checker._schedule_checker_instance = schedule_checker_instance
 
 # Initialize background scheduler
+bg_scheduler = None
 if settings.scheduler_enabled:
     bg_scheduler = BackgroundScheduler()
-    bg_scheduler.add_job(check_and_update_schedule, 'interval', seconds=settings.scheduler_interval_seconds)
+    bg_scheduler.add_job(schedule_checker_instance.check_and_update_schedule, 'interval', seconds=settings.scheduler_interval_seconds)
     bg_scheduler.start()
     logger.info(f"Background scheduler started (interval: {settings.scheduler_interval_seconds}s)")
 else:
@@ -62,14 +65,15 @@ async def health_check():
     }
 
     # Check database connectivity
+    db = SessionLocal()
     try:
-        db = SessionLocal()
         db.execute("SELECT 1")
-        db.close()
         health_status["components"]["database"] = "healthy"
     except Exception as e:
         health_status["components"]["database"] = f"unhealthy: {str(e)}"
         health_status["status"] = "degraded"
+    finally:
+        db.close()
 
     # Check DSPy availability
     try:
@@ -92,6 +96,16 @@ async def health_check():
         health_status["components"]["background_scheduler"] = f"error: {str(e)}"
 
     return health_status
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Shutdown event handler to clean up resources"""
+    global bg_scheduler
+    if bg_scheduler is not None:
+        logger.info("Shutting down background scheduler...")
+        bg_scheduler.shutdown()
+        logger.info("Background scheduler shut down successfully")
 
 
 if __name__ == '__main__':

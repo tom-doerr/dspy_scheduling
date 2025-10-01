@@ -50,6 +50,18 @@ class PrioritizerModule(dspy.Module):
             lambda: self.prioritize(tasks=tasks, global_context=global_context)
         )
 
+def _serialize_schedule(existing_schedule):
+    """Serialize schedule for logging - converts ScheduledTask objects to dicts"""
+    return [
+        s.dict() if hasattr(s, 'dict') else {
+            'id': s.id,
+            'title': s.title,
+            'start_time': s.start_time,
+            'end_time': s.end_time
+        }
+        for s in existing_schedule
+    ]
+
 class TimeSlotModule(dspy.Module):
     def __init__(self):
         super().__init__()
@@ -57,6 +69,20 @@ class TimeSlotModule(dspy.Module):
 
     def forward(self, new_task, task_context, global_context, current_datetime, existing_schedule):
         from dspy_tracker import track_dspy_execution
-        return track_dspy_execution("TimeSlotScheduler", new_task=new_task, task_context=task_context, global_context=global_context, current_datetime=current_datetime, existing_schedule=[s.dict() if hasattr(s, 'dict') else {'id': s.id, 'title': s.title, 'start_time': s.start_time, 'end_time': s.end_time} for s in existing_schedule])(
-            lambda: self.schedule_time(new_task=new_task, task_context=task_context, global_context=global_context, current_datetime=current_datetime, existing_schedule=existing_schedule)
+        serialized_schedule = _serialize_schedule(existing_schedule)
+        return track_dspy_execution(
+            "TimeSlotScheduler",
+            new_task=new_task,
+            task_context=task_context,
+            global_context=global_context,
+            current_datetime=current_datetime,
+            existing_schedule=serialized_schedule
+        )(
+            lambda: self.schedule_time(
+                new_task=new_task,
+                task_context=task_context,
+                global_context=global_context,
+                current_datetime=current_datetime,
+                existing_schedule=existing_schedule
+            )
         )

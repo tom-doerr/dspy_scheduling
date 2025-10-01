@@ -37,12 +37,6 @@ class TaskRepository:
         self.db.refresh(task)
         return task
 
-    def update(self, task: Task) -> Task:
-        """Update an existing task"""
-        self.db.commit()
-        self.db.refresh(task)
-        return task
-
     def delete(self, task: Task) -> None:
         """Delete a task"""
         self.db.delete(task)
@@ -50,6 +44,7 @@ class TaskRepository:
 
     def start_task(self, task: Task) -> Task:
         """Mark task as started"""
+        self.db.refresh(task)
         if not task.actual_start_time:
             task.actual_start_time = datetime.now()
             self.db.commit()
@@ -57,6 +52,7 @@ class TaskRepository:
 
     def complete_task(self, task: Task) -> Task:
         """Mark task as completed"""
+        self.db.refresh(task)
         task.completed = True
         task.actual_end_time = datetime.now()
         self.db.commit()

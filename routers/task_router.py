@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Form, Depends
+from fastapi import APIRouter, Request, Form, Depends, HTTPException
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from models import get_db
@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from repositories.task_repository import TaskRepository
 from repositories.context_repository import GlobalContextRepository
 from services.task_service import TaskService
+from schemas import TaskCreate
+from pydantic import ValidationError
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -48,7 +50,13 @@ async def add_task(
     due_date: str = Form(None),
     service: TaskService = Depends(get_task_service)
 ):
-    task = service.create_task(title, description, context, due_date)
+    # Validate input using Pydantic schema
+    try:
+        task_data = TaskCreate(title=title, description=description, context=context, due_date=due_date)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    task = service.create_task(task_data.title, task_data.description, task_data.context, task_data.due_date)
     return templates.TemplateResponse('task_item.html', {'request': request, 'task': task})
 
 
