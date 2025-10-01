@@ -2,6 +2,9 @@ from sqlalchemy.orm import Session
 from models import Task
 from typing import List, Optional
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class TaskRepository:
@@ -43,12 +46,15 @@ class TaskRepository:
         self.db.add(task)
         self.db.commit()
         self.db.refresh(task)
+        logger.info(f"Created task ID={task.id}: '{task.title}'")
         return task
 
     def delete(self, task: Task) -> None:
         """Delete a task"""
+        task_id, task_title = task.id, task.title
         self.db.delete(task)
         self.db.commit()
+        logger.info(f"Deleted task ID={task_id}: '{task_title}'")
 
     def start_task(self, task: Task) -> Task:
         """Mark task as started"""
@@ -65,6 +71,7 @@ class TaskRepository:
                 raise ValueError(f"Cannot start task: Another task '{active_task.title}' is already active")
             task.actual_start_time = datetime.now()
             self.db.commit()
+            logger.info(f"Started task ID={task.id}: '{task.title}'")
         return task
 
     def stop_task(self, task: Task) -> Task:
@@ -80,6 +87,7 @@ class TaskRepository:
 
         task.actual_start_time = None
         self.db.commit()
+        logger.info(f"Stopped task ID={task.id}: '{task.title}'")
         return task
 
     def complete_task(self, task: Task) -> Task:
@@ -93,4 +101,5 @@ class TaskRepository:
         task.completed = True
         task.actual_end_time = datetime.now()
         self.db.commit()
+        logger.info(f"Completed task ID={task.id}: '{task.title}'")
         return task

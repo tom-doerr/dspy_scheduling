@@ -13,11 +13,15 @@ router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
 
-def get_task_service(db: Session = Depends(get_db)):
+def get_task_service(db: Session = Depends(get_db), request: Request = None):
     """Dependency to get task service"""
-    # Get time_scheduler from schedule_checker to avoid circular import
-    from schedule_checker import get_time_scheduler
-    time_scheduler = get_time_scheduler()
+    from app import get_schedule_checker
+    # Get time_scheduler from app state
+    if request:
+        schedule_checker = get_schedule_checker(request)
+        time_scheduler = schedule_checker.get_time_scheduler()
+    else:
+        time_scheduler = None
     task_repo = TaskRepository(db)
     context_repo = GlobalContextRepository(db)
     return TaskService(task_repo, context_repo, time_scheduler)
@@ -116,16 +120,15 @@ async def delete_task(task_id: int = Path(..., gt=0), service: TaskService = Dep
 
 @router.post('/reprioritize', response_class=HTMLResponse)
 async def reprioritize_tasks(request: Request, db: Session = Depends(get_db)):
-    from schedule_checker import _schedule_checker_instance
-    if _schedule_checker_instance is None:
-        raise HTTPException(status_code=500, detail="Scheduler not initialized")
+    from app import get_schedule_checker
+    schedule_checker = get_schedule_checker(request)
 
     from repositories.task_repository import TaskRepository
     from repositories.context_repository import GlobalContextRepository
     task_repo = TaskRepository(db)
     context_repo = GlobalContextRepository(db)
 
-    tasks_reprioritized = _schedule_checker_instance.reprioritize_tasks(task_repo, context_repo)
+    tasks_reprioritized = schedule_checker.reprioritize_tasks(task_repo, context_repo)
 
     tasks = task_repo.get_all()
     return templates.TemplateResponse(request, 'tasks.html', {'tasks': tasks})

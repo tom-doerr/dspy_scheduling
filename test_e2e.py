@@ -212,7 +212,7 @@ class TestTimelineView:
         """Test that timeline view loads successfully."""
         page.goto("/calendar")
         expect(page.locator("h1")).to_contain_text("DSPy Task Scheduler")
-        expect(page.locator("h2")).to_contain_text("Gantt Chart")
+        expect(page.locator("h2")).to_contain_text("Timeline")
 
     def test_timeline_displays_scheduled_task(self, page: Page):
         """Test that scheduled tasks appear in timeline view."""
@@ -221,7 +221,9 @@ class TestTimelineView:
         page.fill('input[name="title"]', "Timeline Task Test")
         page.fill('textarea[name="context"]', "Testing timeline display")
         page.click('button[type="submit"]')
-        page.wait_for_timeout(1000)
+
+        # Wait for task to appear in task list (confirms HTMX swap completed)
+        expect(page.locator(".task:has-text('Timeline Task Test')")).to_be_visible(timeout=3000)
 
         # Navigate to timeline
         page.click('a:has-text("Timeline")')
@@ -229,7 +231,7 @@ class TestTimelineView:
 
         # Check that task appears in timeline
         expect(page.locator(".timeline-item")).to_be_visible()
-        expect(page.locator(".gantt-item")).to_contain_text("Timeline Task Test")
+        expect(page.locator(".timeline-item")).to_contain_text("Timeline Task Test")
 
     def test_timeline_shows_multiple_tasks(self, page: Page):
         """Test that timeline displays multiple scheduled tasks."""
@@ -240,7 +242,8 @@ class TestTimelineView:
         for task_name in tasks:
             page.fill('input[name="title"]', task_name)
             page.click('button[type="submit"]')
-            page.wait_for_timeout(500)
+            # Wait for task to appear before creating next one
+            expect(page.locator(f".task:has-text('{task_name}')")).to_be_visible(timeout=3000)
 
         # Navigate to timeline
         page.click('a:has-text("Timeline")')
@@ -250,14 +253,16 @@ class TestTimelineView:
         gantt_items = page.locator(".timeline-item")
         expect(gantt_items).to_have_count(3)
         for task_name in tasks:
-            expect(page.locator(".gantt-item")).to_contain_text(task_name)
+            expect(page.locator(".timeline-item")).to_contain_text(task_name)
 
     def test_timeline_shows_task_times(self, page: Page):
         """Test that timeline displays scheduled start and end times."""
         page.goto("/")
         page.fill('input[name="title"]', "Timed Task")
         page.click('button[type="submit"]')
-        page.wait_for_timeout(1000)
+
+        # Wait for task to appear
+        expect(page.locator(".task:has-text('Timed Task')")).to_be_visible(timeout=3000)
 
         # Navigate to timeline
         page.click('a:has-text("Timeline")')
@@ -289,7 +294,9 @@ class TestTimelineView:
         page.goto("/")
         page.fill('input[name="title"]', "Task to Complete")
         page.click('button[type="submit"]')
-        page.wait_for_timeout(1000)
+
+        # Wait for task to appear
+        expect(page.locator(".task:has-text('Task to Complete')")).to_be_visible(timeout=3000)
 
         # Complete the task
         page.locator('button:has-text("Complete")').first.click()
@@ -300,12 +307,12 @@ class TestTimelineView:
         page.wait_for_timeout(500)
 
         # Check that completed task appears with completed styling
-        completed_item = page.locator(".gantt-item.completed")
+        completed_item = page.locator(".timeline-item.completed")
         if completed_item.count() > 0:
             expect(completed_item).to_be_visible()
         else:
             # At minimum, the task should appear
-            expect(page.locator(".gantt-item")).to_contain_text("Task to Complete")
+            expect(page.locator(".timeline-item")).to_contain_text("Task to Complete")
 
     def test_timeline_chronological_order(self, page: Page):
         """Test that tasks appear in chronological order in timeline."""
@@ -316,7 +323,8 @@ class TestTimelineView:
         for name in task_names:
             page.fill('input[name="title"]', name)
             page.click('button[type="submit"]')
-            page.wait_for_timeout(800)
+            # Wait for each task to appear
+            expect(page.locator(f".task:has-text('{name}')")).to_be_visible(timeout=3000)
 
         # Navigate to timeline
         page.click('a:has-text("Timeline")')

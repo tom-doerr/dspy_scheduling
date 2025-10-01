@@ -48,10 +48,12 @@ class GlobalContextRepository:
         if not context:
             context = GlobalContext(singleton=True, context=context_text)
             self.db.add(context)
+            logger.info("Created GlobalContext via update")
         else:
             # Refresh to prevent race conditions
             self.db.refresh(context)
             context.context = context_text
             context.updated_at = datetime.now()
+            logger.info("Updated GlobalContext")
         self.db.commit()
         return context

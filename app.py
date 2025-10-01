@@ -29,10 +29,6 @@ dspy.configure(lm=lm)
 prioritizer = PrioritizerModule()
 time_scheduler = TimeSlotModule()
 
-# Create schedule checker with dependency injection
-schedule_checker_instance = ScheduleChecker(time_scheduler)
-schedule_checker._schedule_checker_instance = schedule_checker_instance
-
 # Global scheduler reference
 bg_scheduler = None
 
@@ -43,6 +39,11 @@ async def lifespan(app: FastAPI):
 
     # Startup
     logger.info("Starting application...")
+
+    # Store schedule checker in app state for dependency injection
+    schedule_checker_instance = ScheduleChecker(time_scheduler)
+    app.state.schedule_checker = schedule_checker_instance
+
     if settings.scheduler_enabled:
         bg_scheduler = BackgroundScheduler()
         bg_scheduler.add_job(schedule_checker_instance.check_and_update_schedule, 'interval', seconds=settings.scheduler_interval_seconds)
@@ -61,6 +62,15 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app with lifespan
 app = FastAPI(lifespan=lifespan)
+
+
+def get_schedule_checker(request: Request) -> ScheduleChecker:
+    """Dependency to get schedule checker from app state"""
+    if not hasattr(request.app.state, 'schedule_checker'):
+        # For tests or when scheduler not initialized
+        return ScheduleChecker(time_scheduler)
+    return request.app.state.schedule_checker
+
 
 # Include routers
 app.include_router(task_router.router)

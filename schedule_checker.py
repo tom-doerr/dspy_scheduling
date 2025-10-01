@@ -205,14 +205,3 @@ class ScheduleChecker:
             return tasks_rescheduled + tasks_scheduled
         finally:
             db.close()
-
-
-# Module-level instance (set from app.py)
-_schedule_checker_instance = None
-
-
-def get_time_scheduler():
-    """Get the time scheduler instance from the module-level ScheduleChecker"""
-    if _schedule_checker_instance is None:
-        return None
-    return _schedule_checker_instance.time_scheduler

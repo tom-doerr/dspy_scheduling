@@ -1,6 +1,9 @@
 from sqlalchemy.orm import Session
 from models import DSPyExecution
 from typing import List
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class DSPyExecutionRepository:
@@ -17,4 +20,5 @@ class DSPyExecutionRepository:
         """Create a new execution record"""
         self.db.add(execution)
         self.db.commit()
+        logger.debug(f"Logged DSPy execution: {execution.module_name} ({execution.duration_ms:.2f}ms)")
         return execution

@@ -1,6 +1,9 @@
 from sqlalchemy.orm import Session
 from models import ChatMessage
 from typing import List
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ChatRepository:
@@ -14,6 +17,7 @@ class ChatRepository:
         self.db.add(chat_message)
         self.db.commit()
         self.db.refresh(chat_message)
+        logger.info(f"Created chat message ID={chat_message.id}")
         return chat_message
 
     def get_recent(self, limit: int = 50) -> List[ChatMessage]:
@@ -29,4 +33,5 @@ class ChatRepository:
         count = self.db.query(ChatMessage).count()
         self.db.query(ChatMessage).delete()
         self.db.commit()
+        logger.info(f"Deleted all chat messages (count={count})")
         return count

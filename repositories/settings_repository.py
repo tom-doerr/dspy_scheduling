@@ -43,4 +43,5 @@ class SettingsRepository:
         settings.max_tokens = max_tokens
         self.db.commit()
         self.db.refresh(settings)
+        logger.info(f"Updated Settings: model={llm_model}, tokens={max_tokens}")
         return settings
