@@ -1,0 +1,8 @@
+<div class="section">
+    <h2>Global Context</h2>
+    <p><small>This context is used by all DSPy modules to understand your priorities and constraints.</small></p>
+    <form hx-post="/global-context" hx-swap="outerHTML">
+        <textarea name="context" rows="6" placeholder="e.g., I prefer mornings, need lunch breaks, work better in 2-hour blocks...">{{ context }}</textarea>
+        <button type="submit">Update Context</button>
+    </form>
+</div>

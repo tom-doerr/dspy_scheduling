@@ -1,0 +1,11 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8081:5000"
+    volumes:
+      - .:/app
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - DATABASE_URL=sqlite:///tasks.db
+    command: python app.py

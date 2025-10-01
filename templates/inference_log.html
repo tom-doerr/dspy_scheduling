@@ -1,0 +1,27 @@
+<div class="section" style="max-height: 500px; overflow-y: auto;" id="inference-log-container">
+    <h2>DSPy Inference Log</h2>
+    <p><small>Latest 50 inference executions (newest at bottom)</small></p>
+    {% for exec in executions %}
+    <div class="inference">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <strong>{{ exec.module_name }}</strong>
+            <small>{{ exec.created_at.strftime('%Y-%m-%d %H:%M:%S') }} • {{ "%.2f"|format(exec.duration_ms) }}ms</small>
+        </div>
+        <div style="margin-bottom: 10px;">
+            <strong>📥 Input:</strong>
+            <pre>{{ exec.inputs }}</pre>
+        </div>
+        <div>
+            <strong>📤 Output:</strong>
+            <pre>{{ exec.outputs }}</pre>
+        </div>
+    </div>
+    {% endfor %}
+    <script>
+        // Auto-scroll to bottom on load
+        setTimeout(() => {
+            const container = document.getElementById('inference-log-container');
+            if (container) container.scrollTop = container.scrollHeight;
+        }, 100);
+    </script>
+</div>

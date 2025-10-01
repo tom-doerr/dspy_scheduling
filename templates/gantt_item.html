@@ -1,0 +1,41 @@
+<div class="gantt-row" style="display: flex; align-items: center; margin: 15px 0; padding: 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.05);">
+    <div style="width: 200px; padding-right: 20px;">
+        <div style="font-weight: bold; {% if task.completed %}text-decoration: line-through; opacity: 0.6;{% endif %}">
+            {{ task.title }}
+        </div>
+    </div>
+
+    <div style="flex: 1; position: relative; height: 40px; background: rgba(255, 255, 255, 0.1); border-radius: 5px; overflow: hidden;">
+        <div style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); height: 30px;
+                    background: {% if task.completed %}rgba(128, 128, 128, 0.6){% else %}linear-gradient(90deg, #4CAF50, #45a049){% endif %};
+                    border-radius: 5px; padding: 0 10px; display: flex; align-items: center; justify-content: center;
+                    width: 100%; box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);">
+            <span style="font-size: 0.85em; white-space: nowrap;">
+                {{ task.scheduled_start_time.strftime('%H:%M') }} - {{ task.scheduled_end_time.strftime('%H:%M') }}
+            </span>
+        </div>
+    </div>
+
+    <div style="margin-left: 15px; display: flex; gap: 5px;">
+        {% if not task.actual_start_time %}
+        <button hx-post="/tasks/{{ task.id }}/start"
+                hx-target="closest .gantt-row"
+                hx-swap="outerHTML"
+                style="padding: 5px 10px; font-size: 0.85em;">
+            Start
+        </button>
+        {% endif %}
+        <button hx-post="/tasks/{{ task.id }}/complete"
+                hx-target="closest .gantt-row"
+                hx-swap="outerHTML"
+                style="padding: 5px 10px; font-size: 0.85em;">
+            {% if task.completed %}✓{% else %}Complete{% endif %}
+        </button>
+        <button hx-delete="/tasks/{{ task.id }}"
+                hx-target="closest .gantt-row"
+                hx-swap="outerHTML"
+                style="padding: 5px 10px; font-size: 0.85em;">
+            Delete
+        </button>
+    </div>
+</div>

@@ -1,0 +1,32 @@
+<div class="task {% if task.completed %}completed{% endif %}" id="task-{{ task.id }}">
+    <h3>{{ task.title }} (Priority: {{ task.priority }})</h3>
+    <p>{{ task.description }}</p>
+    {% if task.scheduled_start_time and task.scheduled_end_time %}
+        <small style="display: block;">Scheduled: {{ task.scheduled_start_time.strftime('%Y-%m-%d %H:%M') }} → {{ task.scheduled_end_time.strftime('%Y-%m-%d %H:%M') }}</small>
+    {% endif %}
+    {% if task.actual_start_time %}
+        <small style="display: block; color: #4CAF50;">Started: {{ task.actual_start_time.strftime('%Y-%m-%d %H:%M') }}</small>
+    {% endif %}
+    <div>
+        {% if not task.actual_start_time %}
+        <button hx-post="/tasks/{{ task.id }}/start"
+                hx-target="#task-{{ task.id }}"
+                hx-swap="outerHTML"
+                hx-on::after-request="showToast('✓ Task started')">
+            Start
+        </button>
+        {% endif %}
+        <button hx-post="/tasks/{{ task.id }}/complete"
+                hx-target="#task-{{ task.id }}"
+                hx-swap="outerHTML"
+                hx-on::after-request="showToast('✓ Task completed')">
+            Complete
+        </button>
+        <button hx-delete="/tasks/{{ task.id }}"
+                hx-target="#task-{{ task.id }}"
+                hx-swap="outerHTML"
+                hx-on::after-request="showToast('✓ Task deleted')">
+            Delete
+        </button>
+    </div>
+</div>

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div>
+    <h2>Gantt Chart</h2>
+    <div style="margin: 20px 0;">
+        <a href="/" style="color: #fff; margin-right: 10px;">Task List</a>
+        <a href="/calendar" style="color: #fff; font-weight: bold;">Timeline</a>
+    </div>
+
+    <div class="gantt-container" style="overflow-x: auto; margin-top: 20px;">
+        <div style="min-width: 800px;">
+            {% for task in tasks %}
+                {% if task.start_time and task.end_time %}
+                {% include 'gantt_item.html' %}
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

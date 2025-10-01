@@ -1,0 +1,13 @@
+<div class="inference">
+    <h2>DSPy Scheduler Output</h2>
+    <h3>Raw Inference Result:</h3>
+    <pre>{{ result }}</pre>
+
+    <h3>Model Response:</h3>
+    <pre>{{ result.scheduled_tasks if result.scheduled_tasks else "No scheduled tasks returned" }}</pre>
+
+    <h3>Updated Task List:</h3>
+    {% for task in tasks %}
+        {% include 'task_item.html' %}
+    {% endfor %}
+</div>
