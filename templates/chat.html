@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="nav">
+    <a href="/">Tasks</a>
+    <a href="/calendar">Timeline</a>
+    <a href="/history">History</a>
+    <a href="/chat" style="color: #fff; background: rgba(255, 255, 255, 0.1);">Chat</a>
+    <a href="/settings">Settings</a>
+</div>
+
+<div class="section">
+    <h2>AI Task Assistant</h2>
+    <p>Chat with the AI assistant to manage your tasks using natural language.</p>
+
+    <div id="chat-history" style="max-height: 500px; overflow-y: auto; margin: 20px 0; padding: 15px; background: rgba(0, 0, 0, 0.2); border-radius: 8px;">
+        {% include 'chat_history.html' %}
+    </div>
+
+    <form hx-post="/chat/send" hx-target="#chat-history" hx-swap="beforeend"
+          hx-on:htmx:afterRequest="this.reset(); document.getElementById('chat-history').scrollTop = document.getElementById('chat-history').scrollHeight">
+        <input type="text" name="message" placeholder="Ask me to create, start, complete, or delete tasks..." required autofocus>
+        <button type="submit">Send</button>
+    </form>
+
+    <button hx-post="/chat/clear" hx-target="#chat-history" hx-swap="innerHTML" hx-confirm="Clear all chat history?" style="background: rgba(255, 0, 0, 0.15); border-color: rgba(255, 0, 0, 0.4); margin-top: 10px;">
+        Clear History
+    </button>
+</div>
+{% endblock %}

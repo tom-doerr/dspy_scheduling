@@ -40,12 +40,13 @@ def browser_context_args():
 def page(context: BrowserContext) -> Page:
     """Create a new page for each test with database cleanup."""
     # Clean database before each E2E test
-    from models import SessionLocal, Task, GlobalContext, DSPyExecution
+    from models import SessionLocal, Task, GlobalContext, DSPyExecution, ChatMessage
     db = SessionLocal()
     try:
         db.query(Task).delete()
         db.query(GlobalContext).delete()
         db.query(DSPyExecution).delete()
+        db.query(ChatMessage).delete()
         db.commit()
     finally:
         db.close()

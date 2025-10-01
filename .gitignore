@@ -209,4 +209,6 @@ __marimo__/
 # Project-specific
 *.db
 *.backup
+db_backup.json
+db_backup_*.json
 app_new.py

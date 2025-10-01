@@ -38,3 +38,24 @@ class ContextUpdate(BaseModel):
         if v and len(v) > 5000:
             raise ValueError('Global context cannot exceed 5000 characters')
         return v
+
+
+class SettingsUpdate(BaseModel):
+    """Schema for updating settings"""
+    llm_model: str = Field(..., min_length=1, max_length=200, description="LLM model name (e.g., openrouter/deepseek/deepseek-v3.2-exp)")
+    max_tokens: int = Field(..., ge=100, le=10000, description="Maximum tokens for LLM responses")
+
+    @field_validator('llm_model')
+    def validate_llm_model(cls, v):
+        if not v or not v.strip():
+            raise ValueError('LLM model name cannot be empty')
+        # Basic format check for provider/model pattern
+        if '/' not in v:
+            raise ValueError('LLM model must include provider (e.g., openrouter/deepseek/model-name)')
+        return v.strip()
+
+    @field_validator('max_tokens')
+    def validate_max_tokens(cls, v):
+        if v < 100 or v > 10000:
+            raise ValueError('max_tokens must be between 100 and 10000')
+        return v

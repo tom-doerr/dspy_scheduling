@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="nav">
+    <a href="/">Task List</a>
+    <a href="/calendar">Timeline</a>
+    <a href="/history">History</a>
+    <a href="/chat">Chat</a>
+    <a href="/settings" style="color: #fff;">Settings</a>
+</div>
+
+<div class="section">
+    <h2>Application Settings</h2>
+    <div id="settings-form" hx-get="/settings-form" hx-trigger="load"></div>
+</div>
+{% endblock %}

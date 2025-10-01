@@ -11,8 +11,9 @@ from config import settings
 from datetime import datetime
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
+from sqlalchemy import text
 
-from routers import task_router, context_router, inference_router
+from routers import task_router, context_router, inference_router, settings_router, chat_router
 
 logging.basicConfig(level=getattr(logging, settings.log_level))
 logger = logging.getLogger(__name__)
@@ -65,6 +66,8 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(task_router.router)
 app.include_router(context_router.router)
 app.include_router(inference_router.router)
+app.include_router(settings_router.router)
+app.include_router(chat_router.router)
 
 
 @app.get('/', response_class=HTMLResponse)
@@ -86,7 +89,7 @@ async def health_check():
     # Check database connectivity
     db = SessionLocal()
     try:
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         health_status["components"]["database"] = "healthy"
     except Exception as e:
         health_status["components"]["database"] = f"unhealthy: {str(e)}"
@@ -108,7 +111,11 @@ async def health_check():
     # Check background scheduler
     try:
         if settings.scheduler_enabled:
-            health_status["components"]["background_scheduler"] = "enabled"
+            if bg_scheduler is not None and bg_scheduler.running:
+                health_status["components"]["background_scheduler"] = "running"
+            else:
+                health_status["components"]["background_scheduler"] = "enabled_but_not_running"
+                health_status["status"] = "degraded"
         else:
             health_status["components"]["background_scheduler"] = "disabled"
     except Exception as e:

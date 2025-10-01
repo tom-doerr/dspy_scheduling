@@ -1,0 +1,11 @@
+<div style="margin: 15px 0; padding: 15px; border-left: 3px solid rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
+    <div style="margin-bottom: 10px;">
+        <strong style="color: rgba(100, 200, 255, 0.9);">You:</strong>
+        <p style="margin: 5px 0 0 0; color: rgba(255, 255, 255, 0.9);">{{ msg.user_message }}</p>
+    </div>
+    <div>
+        <strong style="color: rgba(150, 255, 150, 0.9);">Assistant:</strong>
+        <p style="margin: 5px 0 0 0; color: rgba(255, 255, 255, 0.9); white-space: pre-wrap;">{{ msg.assistant_response }}</p>
+    </div>
+    <small style="color: rgba(255, 255, 255, 0.5); font-size: 0.8rem;">{{ msg.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+</div>

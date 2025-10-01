@@ -4,7 +4,7 @@ from repositories.task_repository import TaskRepository
 from repositories.context_repository import GlobalContextRepository
 import logging
 import dspy
-from scheduler import TimeSlotModule, ScheduledTask
+from scheduler import TimeSlotModule, ScheduledTask, PrioritizerModule, TaskInput
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import os
 
@@ -15,6 +15,7 @@ class ScheduleChecker:
 
     def __init__(self, time_scheduler):
         self.time_scheduler = time_scheduler
+        self.prioritizer = PrioritizerModule()
 
     def get_time_scheduler(self):
         """Get the time scheduler instance"""
@@ -85,6 +86,67 @@ class ScheduleChecker:
 
         logger.info(f"✅ Rescheduled '{task.title}': {result.start_time} → {result.end_time}")
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type((Exception,)),
+        reraise=True
+    )
+    def _call_dspy_prioritizer(self, tasks, global_context):
+        """Call DSPy prioritizer with retry logic"""
+        logger.info(f"Calling DSPy prioritizer for {len(tasks)} tasks (with retry)")
+        return self.prioritizer(tasks=tasks, global_context=global_context)
+
+    def reprioritize_tasks(self, task_repo, context_repo):
+        """Reprioritize all incomplete tasks using DSPy"""
+        if self.prioritizer is None:
+            logger.warning("Prioritizer not initialized, skipping reprioritization")
+            return 0
+
+        # Get all incomplete tasks
+        incomplete_tasks = task_repo.get_incomplete()
+        if not incomplete_tasks:
+            logger.info("No incomplete tasks to prioritize")
+            return 0
+
+        # Prepare task inputs
+        task_inputs = [
+            TaskInput(
+                id=t.id,
+                title=t.title,
+                description=t.description or "",
+                due_date=t.due_date.isoformat() if t.due_date else None
+            )
+            for t in incomplete_tasks
+        ]
+
+        # Get global context
+        global_context_obj = context_repo.get_or_create()
+        global_context = global_context_obj.context or ""
+
+        # Call DSPy prioritizer with retry
+        try:
+            result = self._call_dspy_prioritizer(
+                tasks=task_inputs,
+                global_context=global_context
+            )
+        except Exception as e:
+            logger.error(f"Failed to prioritize tasks after retries: {e}")
+            return 0
+
+        # Update priorities
+        tasks_updated = 0
+        for prioritized_task in result.prioritized_tasks:
+            task = task_repo.get_by_id(prioritized_task.id)
+            if task:
+                task_repo.db.refresh(task)
+                task.priority = prioritized_task.priority
+                task_repo.db.commit()
+                logger.info(f"✅ Updated priority for '{task.title}': {prioritized_task.priority} ({prioritized_task.reasoning})")
+                tasks_updated += 1
+
+        return tasks_updated
+
     def check_and_update_schedule(self):
         """Check if tasks need rescheduling based on current time"""
         logger.info("🔍 Schedule Check STARTED")
@@ -125,10 +187,16 @@ class ScheduleChecker:
                     self.reschedule_task(task_repo, context_repo, task, now)
                     tasks_rescheduled += 1
 
+            # Reprioritize all tasks after scheduling or rescheduling
             if tasks_scheduled > 0:
                 logger.info(f"🎯 Scheduled {tasks_scheduled} new task(s)")
             if tasks_rescheduled > 0:
                 logger.info(f"🔄 Rescheduled {tasks_rescheduled} task(s)")
+
+            if tasks_scheduled > 0 or tasks_rescheduled > 0:
+                tasks_reprioritized = self.reprioritize_tasks(task_repo, context_repo)
+                if tasks_reprioritized > 0:
+                    logger.info(f"🎨 Reprioritized {tasks_reprioritized} task(s)")
             if tasks_scheduled == 0 and tasks_rescheduled == 0:
                 logger.info("✅ Schedule is up to date")
 

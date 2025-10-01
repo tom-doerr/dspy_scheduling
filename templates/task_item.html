@@ -1,6 +1,11 @@
-<div class="task {% if task.completed %}completed{% endif %}" id="task-{{ task.id }}">
-    <div style="display: flex; justify-content: space-between; align-items: start;">
-        <h3 style="margin: 0 10px 0 0;">{{ task.title }}</h3>
+<div class="task {% if task.completed %}completed{% endif %}" id="task-{{ task.id }}"
+     style="cursor: pointer;"
+     hx-get="/tasks/{{ task.id }}/details"
+     hx-target="#modal-container"
+     hx-swap="innerHTML"
+     onclick="event.stopPropagation()">
+    <div style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 8px;">
+        <h3 style="margin: 0; flex: 1; min-width: 200px;">{{ task.title }}</h3>
         <span style="padding: 4px 10px; border-radius: 4px; font-size: 0.85em; font-weight: bold; white-space: nowrap;
                      {% if task.priority >= 7.0 %}background: rgba(255, 87, 51, 0.2); color: #ff5733; border: 1px solid rgba(255, 87, 51, 0.5);
                      {% elif task.priority >= 4.0 %}background: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid rgba(255, 193, 7, 0.5);
@@ -10,17 +15,19 @@
     </div>
     <p>{{ task.description }}</p>
     {% if task.scheduled_start_time and task.scheduled_end_time %}
-        <small style="display: block;">Scheduled: {{ task.scheduled_start_time.strftime('%Y-%m-%d %H:%M') }} → {{ task.scheduled_end_time.strftime('%Y-%m-%d %H:%M') }}</small>
+        {% set duration_seconds = (task.scheduled_end_time - task.scheduled_start_time).total_seconds() %}
+        {% set duration_hours = (duration_seconds / 3600) | round(1) %}
+        <small style="display: block;">Scheduled: {{ task.scheduled_start_time.strftime('%Y-%m-%d %H:%M') }} → {{ task.scheduled_end_time.strftime('%Y-%m-%d %H:%M') }} <span style="color: #4CAF50;">({{ duration_hours }}h)</span></small>
     {% endif %}
     {% if task.actual_start_time %}
         <small style="display: block; color: #4CAF50;">Started: {{ task.actual_start_time.strftime('%Y-%m-%d %H:%M') }}</small>
     {% endif %}
-    <div>
+    <div onclick="event.stopPropagation()">
         {% if not task.actual_start_time %}
         <button hx-post="/tasks/{{ task.id }}/start"
                 hx-target="#task-{{ task.id }}"
                 hx-swap="outerHTML"
-                hx-on::after-request="showToast('✓ Task started')">
+                data-toast-message="✓ Task started">
             Start
         </button>
         {% endif %}
@@ -28,20 +35,20 @@
         <button hx-post="/tasks/{{ task.id }}/stop"
                 hx-target="#task-{{ task.id }}"
                 hx-swap="outerHTML"
-                hx-on::after-request="showToast('✓ Task stopped')">
+                data-toast-message="✓ Task stopped">
             Stop
         </button>
         {% endif %}
         <button hx-post="/tasks/{{ task.id }}/complete"
                 hx-target="#task-{{ task.id }}"
                 hx-swap="outerHTML"
-                hx-on::after-request="showToast('✓ Task completed')">
+                data-toast-message="✓ Task completed">
             Complete
         </button>
         <button hx-delete="/tasks/{{ task.id }}"
                 hx-target="#task-{{ task.id }}"
                 hx-swap="outerHTML"
-                hx-on::after-request="showToast('✓ Task deleted')">
+                data-toast-message="✓ Task deleted">
             Delete
         </button>
     </div>

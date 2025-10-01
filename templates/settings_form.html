@@ -1,0 +1,33 @@
+<form hx-post="/settings" hx-target="#settings-form" hx-swap="outerHTML" id="settings-form"
+      data-toast-message="✓ Settings updated">
+    <div style="margin-bottom: 20px;">
+        <label for="llm-model" style="display: block; margin-bottom: 8px; font-weight: bold;">LLM Model</label>
+        <input type="text" id="llm-model" name="llm_model" value="{{ settings.llm_model }}" required
+               style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.2);
+                      background: rgba(255,255,255,0.1); color: #fff;">
+        <small style="display: block; margin-top: 5px; opacity: 0.8;">
+            Example: openrouter/deepseek/deepseek-v3.2-exp
+        </small>
+    </div>
+
+    <div style="margin-bottom: 20px;">
+        <label for="max-tokens" style="display: block; margin-bottom: 8px; font-weight: bold;">Max Tokens</label>
+        <input type="number" id="max-tokens" name="max_tokens" value="{{ settings.max_tokens }}" required min="100" max="10000"
+               style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.2);
+                      background: rgba(255,255,255,0.1); color: #fff;">
+        <small style="display: block; margin-top: 5px; opacity: 0.8;">
+            Maximum tokens for LLM responses (100-10000)
+        </small>
+    </div>
+
+    <button type="submit"
+            hx-indicator="#save-indicator">
+        <span id="save-text">Save Settings</span>
+        <span id="save-indicator" class="htmx-indicator" style="display: none;">Saving...</span>
+    </button>
+</form>
+
+<style>
+    .htmx-request #save-text { display: none; }
+    .htmx-request #save-indicator { display: inline; }
+</style>

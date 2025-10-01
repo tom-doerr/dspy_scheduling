@@ -840,3 +840,652 @@ def test_multiple_tasks_different_priorities(db_session):
     for i, task in enumerate(retrieved_tasks):
         assert task.priority == float(i)
         assert task.title == f"Task {i}"
+
+
+# Timeline tests
+def test_timeline_page_loads(client):
+    """Test timeline page loads successfully"""
+    response = client.get("/calendar")
+    assert response.status_code == 200
+    assert b"Timeline" in response.content
+
+
+def test_timeline_shows_current_time(client):
+    """Test timeline displays current time indicator"""
+    response = client.get("/calendar")
+    assert response.status_code == 200
+    assert b"Current Time:" in response.content
+    assert b"current-time" in response.content
+
+
+def test_timeline_shows_scheduled_tasks(client, db_session):
+    """Test timeline displays tasks with scheduled times"""
+    from datetime import timedelta
+    now = datetime.now()
+    task = Task(
+        title="Scheduled Task",
+        description="Test description",
+        scheduled_start_time=now + timedelta(hours=1),
+        scheduled_end_time=now + timedelta(hours=3)
+    )
+    db_session.add(task)
+    db_session.commit()
+
+    response = client.get("/calendar")
+    assert response.status_code == 200
+    assert b"Scheduled Task" in response.content
+    assert b"Test description" in response.content
+
+
+def test_timeline_chronological_ordering(client, db_session):
+    """Test timeline sorts tasks chronologically"""
+    from datetime import timedelta
+    now = datetime.now()
+
+    # Create tasks in reverse order
+    task1 = Task(title="Later Task", scheduled_start_time=now + timedelta(hours=5), scheduled_end_time=now + timedelta(hours=6))
+    task2 = Task(title="Earlier Task", scheduled_start_time=now + timedelta(hours=1), scheduled_end_time=now + timedelta(hours=2))
+    task3 = Task(title="Middle Task", scheduled_start_time=now + timedelta(hours=3), scheduled_end_time=now + timedelta(hours=4))
+
+    db_session.add_all([task1, task2, task3])
+    db_session.commit()
+
+    response = client.get("/calendar")
+    content = response.content.decode('utf-8')
+
+    # Verify tasks appear in chronological order
+    earlier_pos = content.find("Earlier Task")
+    middle_pos = content.find("Middle Task")
+    later_pos = content.find("Later Task")
+
+    assert earlier_pos < middle_pos < later_pos
+
+
+def test_timeline_empty_state(client):
+    """Test timeline shows message when no tasks scheduled"""
+    response = client.get("/calendar")
+    assert response.status_code == 200
+    assert b"No scheduled tasks yet" in response.content
+
+
+def test_stop_task_functionality(client, db_session):
+    """Test stopping a started task clears actual_start_time"""
+    task = Task(title="Test Task", actual_start_time=datetime.now())
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
+    task_id = task.id
+
+    # Verify task is started
+    assert task.actual_start_time is not None
+
+    # Stop the task
+    response = client.post(f"/tasks/{task_id}/stop")
+    assert response.status_code == 200
+
+    # Verify actual_start_time was cleared
+    db_session.expire_all()
+    task = db_session.query(Task).filter(Task.id == task_id).first()
+    assert task.actual_start_time is None
+
+
+def test_stop_task_not_started_fails(client, db_session):
+    """Test stopping a task that isn't started returns error"""
+    task = Task(title="Test Task")
+    db_session.add(task)
+    db_session.commit()
+    task_id = task.id
+
+    response = client.post(f"/tasks/{task_id}/stop")
+    assert response.status_code == 400
+
+
+def test_stop_completed_task_fails(client, db_session):
+    """Test stopping a completed task returns error"""
+    task = Task(title="Test Task", actual_start_time=datetime.now(), completed=True, actual_end_time=datetime.now())
+    db_session.add(task)
+    db_session.commit()
+    task_id = task.id
+
+    response = client.post(f"/tasks/{task_id}/stop")
+    assert response.status_code == 400
+
+
+def test_timeline_shows_task_duration(client, db_session):
+    """Test timeline displays task duration correctly"""
+    from datetime import timedelta
+    now = datetime.now()
+    task = Task(
+        title="2 Hour Task",
+        scheduled_start_time=now,
+        scheduled_end_time=now + timedelta(hours=2)
+    )
+    db_session.add(task)
+    db_session.commit()
+
+    response = client.get("/calendar")
+    assert response.status_code == 200
+    assert b"2.0h" in response.content or b"(2h)" in response.content
+
+
+def test_timeline_shows_task_priority(client, db_session):
+    """Test timeline displays task priority badges"""
+    from datetime import timedelta
+    now = datetime.now()
+    task = Task(
+        title="High Priority Task",
+        priority=8.5,
+        scheduled_start_time=now,
+        scheduled_end_time=now + timedelta(hours=1)
+    )
+    db_session.add(task)
+    db_session.commit()
+
+    response = client.get("/calendar")
+    assert response.status_code == 200
+    assert b"P8.5" in response.content
+
+
+def test_timeline_differentiates_completed_tasks(client, db_session):
+    """Test timeline styles completed tasks differently"""
+    from datetime import timedelta
+    now = datetime.now()
+    task = Task(
+        title="Completed Task",
+        scheduled_start_time=now,
+        scheduled_end_time=now + timedelta(hours=1),
+        completed=True,
+        actual_start_time=now,
+        actual_end_time=now + timedelta(hours=1)
+    )
+    db_session.add(task)
+    db_session.commit()
+
+    response = client.get("/calendar")
+    content = response.content.decode('utf-8')
+    assert response.status_code == 200
+    assert "Completed Task" in content
+    # Completed tasks should have gray styling
+    assert "rgba(128, 128, 128" in content
+
+
+# History Tab Tests
+
+def test_history_page_loads(client):
+    """Test history page loads successfully"""
+    response = client.get("/history")
+    assert response.status_code == 200
+    assert b"Historic Time Tracking" in response.content
+
+
+def test_history_shows_completed_tasks(client, db_session):
+    """Test history shows only completed tasks with actual times"""
+    from datetime import timedelta
+    now = datetime.now()
+
+    # Completed task with actual times - should appear
+    completed_task = Task(
+        title="Completed Work",
+        description="Finished task",
+        actual_start_time=now - timedelta(hours=2),
+        actual_end_time=now - timedelta(hours=1),
+        completed=True
+    )
+
+    # Incomplete task - should NOT appear
+    incomplete_task = Task(
+        title="Ongoing Work",
+        actual_start_time=now - timedelta(hours=1),
+        completed=False
+    )
+
+    # Task without actual times - should NOT appear
+    scheduled_task = Task(
+        title="Scheduled Work",
+        scheduled_start_time=now + timedelta(hours=1),
+        scheduled_end_time=now + timedelta(hours=2)
+    )
+
+    db_session.add_all([completed_task, incomplete_task, scheduled_task])
+    db_session.commit()
+
+    response = client.get("/history")
+    content = response.content.decode('utf-8')
+
+    assert response.status_code == 200
+    assert "Completed Work" in content
+    assert "Ongoing Work" not in content
+    assert "Scheduled Work" not in content
+
+
+def test_history_ordering_by_completion_date(client, db_session):
+    """Test history orders tasks by completion date (most recent first)"""
+    from datetime import timedelta
+    now = datetime.now()
+
+    # Create three completed tasks at different times
+    old_task = Task(
+        title="Old Task",
+        actual_start_time=now - timedelta(days=3),
+        actual_end_time=now - timedelta(days=3, hours=-1),
+        completed=True
+    )
+    recent_task = Task(
+        title="Recent Task",
+        actual_start_time=now - timedelta(hours=2),
+        actual_end_time=now - timedelta(hours=1),
+        completed=True
+    )
+    middle_task = Task(
+        title="Middle Task",
+        actual_start_time=now - timedelta(days=1),
+        actual_end_time=now - timedelta(days=1, hours=-1),
+        completed=True
+    )
+
+    db_session.add_all([old_task, recent_task, middle_task])
+    db_session.commit()
+
+    response = client.get("/history")
+    content = response.content.decode('utf-8')
+
+    # Verify tasks appear in reverse chronological order (recent first)
+    recent_pos = content.find("Recent Task")
+    middle_pos = content.find("Middle Task")
+    old_pos = content.find("Old Task")
+
+    assert recent_pos < middle_pos < old_pos
+
+
+def test_history_shows_duration(client, db_session):
+    """Test history displays duration correctly"""
+    from datetime import timedelta
+    now = datetime.now()
+
+    # Task that took 2 hours and 30 minutes
+    task = Task(
+        title="Duration Test",
+        actual_start_time=now - timedelta(hours=3),
+        actual_end_time=now - timedelta(minutes=30),
+        completed=True
+    )
+
+    db_session.add(task)
+    db_session.commit()
+
+    response = client.get("/history")
+    content = response.content.decode('utf-8')
+
+    assert response.status_code == 200
+    assert "Duration Test" in content
+    # Should show duration (2h 30m or similar format)
+    assert ("2h" in content and "30m" in content) or "2.5" in content
+
+
+def test_history_empty_state(client):
+    """Test history shows empty state when no completed tasks exist"""
+    response = client.get("/history")
+    content = response.content.decode('utf-8')
+
+    assert response.status_code == 200
+    assert "No completed tasks yet" in content or "no completed tasks" in content.lower()
+
+
+def test_history_shows_context(client, db_session):
+    """Test history displays task context"""
+    from datetime import timedelta
+    now = datetime.now()
+
+    task = Task(
+        title="Task with Context",
+        description="Important work",
+        context="High priority, urgent",
+        actual_start_time=now - timedelta(hours=2),
+        actual_end_time=now - timedelta(hours=1),
+        completed=True
+    )
+
+    db_session.add(task)
+    db_session.commit()
+
+    response = client.get("/history")
+    content = response.content.decode('utf-8')
+
+    assert response.status_code == 200
+    assert "Task with Context" in content
+    assert "High priority, urgent" in content
+
+
+# Settings Tests
+
+def test_settings_page_loads(client):
+    """Test settings page loads successfully"""
+    response = client.get("/settings")
+    assert response.status_code == 200
+    assert b"Application Settings" in response.content
+
+
+def test_settings_default_values(db_session):
+    """Test settings has default values on creation"""
+    from models import Settings
+    settings = Settings()
+    db_session.add(settings)
+    db_session.commit()
+    db_session.refresh(settings)
+
+    assert settings.llm_model == 'openrouter/deepseek/deepseek-v3.2-exp'
+    assert settings.max_tokens == 2000
+    assert settings.singleton is True
+
+
+def test_settings_update(client, db_session):
+    """Test updating settings via POST"""
+    response = client.post("/settings", data={
+        "llm_model": "openrouter/anthropic/claude-3-sonnet",
+        "max_tokens": 4000
+    })
+
+    assert response.status_code == 200
+
+    # Verify settings were updated in database
+    from models import Settings
+    settings = db_session.query(Settings).first()
+    assert settings.llm_model == "openrouter/anthropic/claude-3-sonnet"
+    assert settings.max_tokens == 4000
+
+
+def test_settings_singleton_constraint(db_session):
+    """Test that only one settings row can exist"""
+    from models import Settings
+    from sqlalchemy.exc import IntegrityError
+
+    settings1 = Settings(singleton=True)
+    db_session.add(settings1)
+    db_session.commit()
+
+    settings2 = Settings(singleton=True)
+    db_session.add(settings2)
+
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+
+
+def test_settings_form_displays_current_values(client, db_session):
+    """Test settings form shows current values"""
+    from models import Settings
+
+    # Create settings with custom values
+    settings = Settings(llm_model="custom/model", max_tokens=3000)
+    db_session.add(settings)
+    db_session.commit()
+
+    response = client.get("/settings-form")
+    content = response.content.decode('utf-8')
+
+    assert response.status_code == 200
+    assert "custom/model" in content
+    assert "3000" in content
+
+
+def test_settings_max_tokens_validation(client):
+    """Test max_tokens field has proper validation"""
+    response = client.get("/settings-form")
+    content = response.content.decode('utf-8')
+
+    assert "min=\"100\"" in content
+    assert "max=\"10000\"" in content
+
+
+def test_settings_get_or_create(db_session):
+    """Test get_or_create returns existing or creates new settings"""
+    from repositories.settings_repository import SettingsRepository
+    from models import Settings
+
+    repo = SettingsRepository(db_session)
+
+    # First call creates
+    settings1 = repo.get_or_create()
+    assert settings1 is not None
+    assert settings1.id is not None
+
+    # Second call returns same
+    settings2 = repo.get_or_create()
+    assert settings2.id == settings1.id
+
+
+def test_settings_form_has_toast_notification(client):
+    """Test settings form shows toast notification on save"""
+    response = client.get("/settings-form")
+    content = response.content.decode('utf-8')
+
+    assert response.status_code == 200
+    assert "hx-on::after-request" in content
+    assert "showToast" in content
+    assert "Settings updated" in content
+
+
+def test_settings_form_has_loading_indicator(client):
+    """Test settings form shows loading state when saving"""
+    response = client.get("/settings-form")
+    content = response.content.decode('utf-8')
+
+    assert response.status_code == 200
+    assert 'id="save-indicator"' in content
+    assert "Saving..." in content
+    assert ".htmx-request" in content
+
+
+def test_reprioritize_endpoint(client, db_session):
+    """Test /reprioritize endpoint reprioritizes tasks"""
+    from models import Task
+    from unittest.mock import patch, MagicMock
+    from scheduler import PrioritizedTask
+
+    # Create test tasks
+    task1 = Task(title="Task 1", priority=0.0, completed=False)
+    task2 = Task(title="Task 2", priority=0.0, completed=False)
+    db_session.add_all([task1, task2])
+    db_session.commit()
+
+    # Mock the prioritizer
+    mock_result = MagicMock()
+    mock_result.prioritized_tasks = [
+        PrioritizedTask(id=task1.id, title="Task 1", priority=8.5, reasoning="High priority"),
+        PrioritizedTask(id=task2.id, title="Task 2", priority=3.2, reasoning="Low priority")
+    ]
+
+    with patch('schedule_checker.ScheduleChecker._call_dspy_prioritizer', return_value=mock_result):
+        response = client.post('/reprioritize')
+        assert response.status_code == 200
+
+    # Verify priorities were updated
+    db_session.refresh(task1)
+    db_session.refresh(task2)
+    assert task1.priority == 8.5
+    assert task2.priority == 3.2
+
+
+def test_chat_page_loads(client):
+    """Test chat page loads successfully"""
+    response = client.get("/chat")
+    assert response.status_code == 200
+    content = response.content.decode('utf-8')
+    assert "AI Task Assistant" in content
+    assert "Chat" in content
+
+
+def test_send_chat_message(client, db_session):
+    """Test sending a chat message creates a response"""
+    from unittest.mock import patch, MagicMock
+
+    # Mock the DSPy assistant
+    mock_result = MagicMock()
+    mock_result.action = "chat"
+    mock_result.task_id = None
+    mock_result.title = None
+    mock_result.description = None
+    mock_result.context = None
+    mock_result.response = "I can help you manage your tasks!"
+
+    with patch('chat_assistant.ChatAssistantModule.forward', return_value=mock_result):
+        response = client.post("/chat/send", data={"message": "Hello"})
+        assert response.status_code == 200
+        content = response.content.decode('utf-8')
+        assert "You:" in content
+        assert "Assistant:" in content
+        assert "Hello" in content
+
+
+def test_chat_create_task_action(client, db_session):
+    """Test chat assistant can create tasks"""
+    from unittest.mock import patch, MagicMock
+    from models import Task
+
+    # Mock the DSPy assistant to return create_task action
+    mock_result = MagicMock()
+    mock_result.action = "create_task"
+    mock_result.task_id = None
+    mock_result.title = "New Task from Chat"
+    mock_result.description = "Created via chat"
+    mock_result.context = "urgent"
+    mock_result.response = "I've created the task for you!"
+
+    with patch('chat_assistant.ChatAssistantModule.forward', return_value=mock_result):
+        response = client.post("/chat/send", data={"message": "Create a new task"})
+        assert response.status_code == 200
+
+    # Verify task was created
+    tasks = db_session.query(Task).all()
+    assert len(tasks) == 1
+    assert tasks[0].title == "New Task from Chat"
+    assert tasks[0].description == "Created via chat"
+
+
+def test_chat_start_task_action(client, db_session):
+    """Test chat assistant can start tasks"""
+    from unittest.mock import patch, MagicMock
+    from models import Task
+
+    # Create a task
+    task = Task(title="Test Task", description="Test", completed=False)
+    db_session.add(task)
+    db_session.commit()
+
+    # Mock the DSPy assistant to return start_task action
+    mock_result = MagicMock()
+    mock_result.action = "start_task"
+    mock_result.task_id = task.id
+    mock_result.title = None
+    mock_result.description = None
+    mock_result.context = None
+    mock_result.response = "Task started!"
+
+    with patch('chat_assistant.ChatAssistantModule.forward', return_value=mock_result):
+        response = client.post("/chat/send", data={"message": f"Start task {task.id}"})
+        assert response.status_code == 200
+
+    # Verify task was started
+    db_session.refresh(task)
+    assert task.actual_start_time is not None
+
+
+def test_chat_complete_task_action(client, db_session):
+    """Test chat assistant can complete tasks"""
+    from unittest.mock import patch, MagicMock
+    from models import Task
+    from datetime import datetime
+
+    # Create a started task
+    task = Task(title="Test Task", description="Test", completed=False, actual_start_time=datetime.now())
+    db_session.add(task)
+    db_session.commit()
+
+    # Mock the DSPy assistant to return complete_task action
+    mock_result = MagicMock()
+    mock_result.action = "complete_task"
+    mock_result.task_id = task.id
+    mock_result.title = None
+    mock_result.description = None
+    mock_result.context = None
+    mock_result.response = "Task completed!"
+
+    with patch('chat_assistant.ChatAssistantModule.forward', return_value=mock_result):
+        response = client.post("/chat/send", data={"message": f"Complete task {task.id}"})
+        assert response.status_code == 200
+
+    # Verify task was completed
+    db_session.refresh(task)
+    assert task.completed is True
+    assert task.actual_end_time is not None
+
+
+def test_chat_delete_task_action(client, db_session):
+    """Test chat assistant can delete tasks"""
+    from unittest.mock import patch, MagicMock
+    from models import Task
+
+    # Create a task
+    task = Task(title="Test Task", description="Test", completed=False)
+    db_session.add(task)
+    db_session.commit()
+    task_id = task.id
+
+    # Mock the DSPy assistant to return delete_task action
+    mock_result = MagicMock()
+    mock_result.action = "delete_task"
+    mock_result.task_id = task_id
+    mock_result.title = None
+    mock_result.description = None
+    mock_result.context = None
+    mock_result.response = "Task deleted!"
+
+    with patch('chat_assistant.ChatAssistantModule.forward', return_value=mock_result):
+        response = client.post("/chat/send", data={"message": f"Delete task {task_id}"})
+        assert response.status_code == 200
+
+    # Verify task was deleted
+    tasks = db_session.query(Task).filter(Task.id == task_id).all()
+    assert len(tasks) == 0
+
+
+def test_clear_chat_history(client, db_session):
+    """Test clearing chat history"""
+    from unittest.mock import patch, MagicMock
+    from models import ChatMessage
+
+    # Create some chat messages
+    msg1 = ChatMessage(user_message="Hello", assistant_response="Hi!")
+    msg2 = ChatMessage(user_message="How are you?", assistant_response="Great!")
+    db_session.add_all([msg1, msg2])
+    db_session.commit()
+
+    # Clear history
+    response = client.post("/chat/clear")
+    assert response.status_code == 200
+
+    # Verify messages were deleted
+    messages = db_session.query(ChatMessage).all()
+    assert len(messages) == 0
+
+
+def test_chat_message_persistence(client, db_session):
+    """Test that chat messages are persisted"""
+    from unittest.mock import patch, MagicMock
+    from models import ChatMessage
+
+    mock_result = MagicMock()
+    mock_result.action = "chat"
+    mock_result.task_id = None
+    mock_result.title = None
+    mock_result.description = None
+    mock_result.context = None
+    mock_result.response = "Test response"
+
+    with patch('chat_assistant.ChatAssistantModule.forward', return_value=mock_result):
+        client.post("/chat/send", data={"message": "Test message"})
+
+    # Verify message was saved
+    messages = db_session.query(ChatMessage).all()
+    assert len(messages) == 1
+    assert messages[0].user_message == "Test message"
+    assert messages[0].assistant_response == "Test response"

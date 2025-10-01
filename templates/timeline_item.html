@@ -1,8 +1,20 @@
-<div class="timeline-item" style="margin: 10px 0; padding: 15px; border-left: 4px solid {% if task.completed %}#666{% else %}#4CAF50{% endif %}; background: rgba(255, 255, 255, 0.1); border-radius: 5px;">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div style="flex: 1;">
+{% set duration_seconds = (task.scheduled_end_time - task.scheduled_start_time).total_seconds() %}
+{% set duration_minutes = (duration_seconds / 60) | int %}
+{% set height = (duration_minutes * 2) | int %}
+{% if height < 60 %}{% set height = 60 %}{% endif %}
+
+<div class="timeline-item" style="position: relative; margin-bottom: 5px; height: {{ height }}px; cursor: pointer;
+                                  background: {% if task.completed %}rgba(128, 128, 128, 0.2){% else %}rgba(76, 175, 80, 0.2){% endif %};
+                                  border-left: 4px solid {% if task.completed %}#666{% else %}#4CAF50{% endif %};
+                                  border-radius: 5px; padding: 10px 15px; display: flex; flex-direction: column; justify-content: space-between;
+                                  backdrop-filter: blur(10px);"
+     hx-get="/tasks/{{ task.id }}/details"
+     hx-target="#modal-container"
+     hx-swap="innerHTML">
+    <div style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 10px;">
+        <div style="flex: 1; min-width: 200px;">
             <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                <h3 style="margin: 0;">{{ task.title }}</h3>
+                <h3 style="margin: 0; {% if task.completed %}text-decoration: line-through; opacity: 0.6;{% endif %}">{{ task.title }}</h3>
                 <span style="padding: 3px 8px; border-radius: 3px; font-size: 0.75em; font-weight: bold;
                              {% if task.priority >= 7.0 %}background: rgba(255, 87, 51, 0.2); color: #ff5733; border: 1px solid rgba(255, 87, 51, 0.5);
                              {% elif task.priority >= 4.0 %}background: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid rgba(255, 193, 7, 0.5);
@@ -10,24 +22,55 @@
                     P{{ task.priority }}
                 </span>
             </div>
-            <div style="font-size: 0.9em; opacity: 0.8;">
-                <span>{{ task.scheduled_start_time.strftime('%Y-%m-%d %H:%M') }}</span>
-                <span style="margin: 0 10px;">→</span>
-                <span>{{ task.scheduled_end_time.strftime('%Y-%m-%d %H:%M') }}</span>
-            </div>
+            {% if task.description %}
+            <p style="margin: 5px 0; font-size: 0.9em; opacity: 0.9;">{{ task.description }}</p>
+            {% endif %}
         </div>
-        <div>
+        <div style="display: flex; gap: 5px; flex-wrap: wrap;" onclick="event.stopPropagation()">
+            {% if not task.actual_start_time and not task.completed %}
+            <button hx-post="/tasks/{{ task.id }}/start"
+                    hx-target="closest .timeline-item"
+                    hx-swap="outerHTML"
+                    data-toast-message="✓ Task started"
+                    style="padding: 5px 12px; font-size: 0.85em; white-space: nowrap;">
+                Start
+            </button>
+            {% endif %}
+            {% if task.actual_start_time and not task.completed %}
+            <button hx-post="/tasks/{{ task.id }}/stop"
+                    hx-target="closest .timeline-item"
+                    hx-swap="outerHTML"
+                    data-toast-message="✓ Task stopped"
+                    style="padding: 5px 12px; font-size: 0.85em; white-space: nowrap;">
+                Stop
+            </button>
+            {% endif %}
+            {% if not task.completed %}
             <button hx-post="/tasks/{{ task.id }}/complete"
                     hx-target="closest .timeline-item"
                     hx-swap="outerHTML"
-                    hx-get="/calendar">
-                {% if task.completed %}Completed{% else %}Complete{% endif %}
+                    data-toast-message="✓ Task completed"
+                    style="padding: 5px 12px; font-size: 0.85em; white-space: nowrap;">
+                Complete
             </button>
+            {% endif %}
             <button hx-delete="/tasks/{{ task.id }}"
                     hx-target="closest .timeline-item"
-                    hx-swap="outerHTML">
+                    hx-swap="outerHTML"
+                    data-toast-message="✓ Task deleted"
+                    style="padding: 5px 12px; font-size: 0.85em; white-space: nowrap;">
                 Delete
             </button>
         </div>
+    </div>
+    <div style="font-size: 0.85em; opacity: 0.8; margin-top: auto;">
+        <span style="font-weight: bold;">{{ task.scheduled_start_time.strftime('%a %b %d, %Y') }}</span>
+        <span style="margin: 0 5px;">•</span>
+        <span>{{ task.scheduled_start_time.strftime('%H:%M') }} → {{ task.scheduled_end_time.strftime('%H:%M') }}</span>
+        {% set duration_hours = (duration_seconds / 3600) | round(1) %}
+        <span style="margin-left: 10px; color: #4CAF50; font-weight: bold;">({{ duration_hours }}h)</span>
+        {% if task.actual_start_time %}
+        <span style="margin-left: 10px; color: #4CAF50;">● Started</span>
+        {% endif %}
     </div>
 </div>

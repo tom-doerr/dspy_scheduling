@@ -1,0 +1,68 @@
+<div id="task-modal" class="modal-overlay" onclick="if(event.target === this) closeModal()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 20px;">
+            <h2 style="margin: 0;">{{ task.title }}</h2>
+            <button onclick="closeModal()" style="background: none; border: none; font-size: 1.5em; cursor: pointer; color: white;">×</button>
+        </div>
+
+        <div style="display: grid; gap: 15px;">
+            {% if task.description %}
+            <div>
+                <h3 style="margin: 0 0 8px 0; font-size: 0.9em; opacity: 0.7;">Description</h3>
+                <p style="margin: 0;">{{ task.description }}</p>
+            </div>
+            {% endif %}
+
+            {% if task.context %}
+            <div>
+                <h3 style="margin: 0 0 8px 0; font-size: 0.9em; opacity: 0.7;">Context</h3>
+                <p style="margin: 0;">{{ task.context }}</p>
+            </div>
+            {% endif %}
+
+            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                <div>
+                    <h3 style="margin: 0 0 8px 0; font-size: 0.9em; opacity: 0.7;">Priority</h3>
+                    <span style="padding: 4px 12px; border-radius: 4px; font-weight: bold; background: rgba(76, 175, 80, 0.2); color: #4CAF50;">
+                        {{ task.priority }}
+                    </span>
+                </div>
+                <div>
+                    <h3 style="margin: 0 0 8px 0; font-size: 0.9em; opacity: 0.7;">Status</h3>
+                    <span style="padding: 4px 12px; border-radius: 4px; font-weight: bold; background: rgba(76, 175, 80, 0.2); color: #4CAF50;">
+                        {% if task.completed %}Completed{% elif task.actual_start_time %}In Progress{% else %}Not Started{% endif %}
+                    </span>
+                </div>
+            </div>
+
+            <div>
+                <h3 style="margin: 0 0 12px 0; font-size: 0.9em; opacity: 0.7;">Timeline</h3>
+                <div style="display: grid; gap: 8px; font-size: 0.9em;">
+                    <div><span style="opacity: 0.6;">Created:</span> {{ task.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+                    {% if task.scheduled_start_time %}
+                    {% set duration_seconds = (task.scheduled_end_time - task.scheduled_start_time).total_seconds() %}
+                    {% set duration_hours = (duration_seconds / 3600) | round(1) %}
+                    <div><span style="opacity: 0.6;">Scheduled:</span> {{ task.scheduled_start_time.strftime('%Y-%m-%d %H:%M') }} → {{ task.scheduled_end_time.strftime('%H:%M') }} <span style="color: #4CAF50;">({{ duration_hours }}h)</span></div>
+                    {% endif %}
+                    {% if task.actual_start_time %}
+                    <div><span style="opacity: 0.6;">Started:</span> <span style="color: #4CAF50;">{{ task.actual_start_time.strftime('%Y-%m-%d %H:%M:%S') }}</span></div>
+                    {% endif %}
+                    {% if task.actual_end_time %}
+                    <div><span style="opacity: 0.6;">Completed:</span> <span style="color: #4CAF50;">{{ task.actual_end_time.strftime('%Y-%m-%d %H:%M:%S') }}</span></div>
+                    {% set actual_duration = (task.actual_end_time - task.actual_start_time).total_seconds() %}
+                    {% set actual_hours = (actual_duration / 3600) | round(1) %}
+                    <div><span style="opacity: 0.6;">Actual Duration:</span> <span style="color: #4CAF50; font-weight: bold;">{{ actual_hours }}h</span></div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+            {% if not task.completed %}
+            <button hx-post="/tasks/{{ task.id }}/complete" hx-target="#task-modal" hx-swap="outerHTML" data-toast-message="✓ Completed">Complete</button>
+            {% endif %}
+            <button hx-delete="/tasks/{{ task.id }}" hx-on:htmx:afterRequest="closeModal(); showToast('✓ Deleted')" style="background: rgba(255, 87, 51, 0.2);">Delete</button>
+            <button onclick="closeModal()" style="margin-left: auto;">Close</button>
+        </div>
+    </div>
+</div>

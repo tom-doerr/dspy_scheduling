@@ -5,6 +5,8 @@
     <a href="/" style="color: #fff;">Task List</a>
     <a href="/calendar">Timeline</a>
     <a href="/history">History</a>
+    <a href="/chat">Chat</a>
+    <a href="/settings">Settings</a>
 </div>
 
 <div hx-get="/global-context" hx-trigger="load"></div>
@@ -12,7 +14,7 @@
 <div class="section">
     <h2>Add New Task</h2>
     <form hx-post="/tasks" hx-target="#task-list" hx-swap="beforeend" id="add-task-form"
-          hx-on::after-request="showToast('✓ Task added'); this.reset();">
+          data-toast-message="✓ Task added">
         <input type="text" name="title" placeholder="Task title" required id="task-title-input" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('add-task-form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));}">
         <textarea name="context" placeholder="Context (optional - e.g., priorities, constraints, preferences)" rows="3"></textarea>
         <button type="submit">Add Task</button>
@@ -23,6 +25,9 @@
     <h2>Tasks</h2>
     <button hx-post="/schedule" hx-target="#schedule-output">
         Run DSPy Scheduler
+    </button>
+    <button hx-post="/reprioritize" hx-target="#task-list" data-toast-message="✓ Tasks reprioritized">
+        Reprioritize All Tasks
     </button>
     <div id="task-list" hx-get="/tasks" hx-trigger="load"></div>
 </div>

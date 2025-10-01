@@ -99,7 +99,33 @@ async def complete_task(request: Request, task_id: int = Path(..., gt=0), servic
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get('/tasks/{task_id}/details', response_class=HTMLResponse)
+async def get_task_details(request: Request, task_id: int = Path(..., gt=0), db: Session = Depends(get_db)):
+    task_repo = TaskRepository(db)
+    task = task_repo.get_by_id(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return templates.TemplateResponse(request, 'task_detail_modal.html', {'task': task})
+
+
 @router.delete('/tasks/{task_id}')
 async def delete_task(task_id: int = Path(..., gt=0), service: TaskService = Depends(get_task_service)):
     service.delete_task(task_id)
     return ''
+
+
+@router.post('/reprioritize', response_class=HTMLResponse)
+async def reprioritize_tasks(request: Request, db: Session = Depends(get_db)):
+    from schedule_checker import _schedule_checker_instance
+    if _schedule_checker_instance is None:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
+
+    from repositories.task_repository import TaskRepository
+    from repositories.context_repository import GlobalContextRepository
+    task_repo = TaskRepository(db)
+    context_repo = GlobalContextRepository(db)
+
+    tasks_reprioritized = _schedule_checker_instance.reprioritize_tasks(task_repo, context_repo)
+
+    tasks = task_repo.get_all()
+    return templates.TemplateResponse(request, 'tasks.html', {'tasks': tasks})

@@ -5,6 +5,10 @@
     <div style="font-size: 0.9em; margin-top: 5px;">
         Started: {{ task.actual_start_time.strftime('%H:%M') }}
     </div>
+    <div id="active-task-duration" style="font-size: 0.95em; margin-top: 5px; color: #4CAF50; font-weight: bold;"
+         data-start-time="{{ task.actual_start_time.isoformat() }}">
+        Duration: <span id="duration-value">0h 0m</span>
+    </div>
     {% if task.scheduled_end_time %}
     <div style="font-size: 0.85em; opacity: 0.8;">
         Scheduled end: {{ task.scheduled_end_time.strftime('%H:%M') }}

@@ -39,6 +39,23 @@ class DSPyExecution(Base):
     duration_ms = Column(Float, nullable=False)
     created_at = Column(DateTime, default=datetime.now)
 
+class Settings(Base):
+    __tablename__ = 'settings'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    singleton = Column(Boolean, default=True, unique=True, nullable=False)
+    llm_model = Column(String(200), default='openrouter/deepseek/deepseek-v3.2-exp', nullable=False)
+    max_tokens = Column(Integer, default=2000, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+class ChatMessage(Base):
+    __tablename__ = 'chat_messages'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_message = Column(Text, nullable=False)
+    assistant_response = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.now)
+
 from config import settings
 
 engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})

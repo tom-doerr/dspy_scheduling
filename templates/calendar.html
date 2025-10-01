@@ -2,21 +2,39 @@
 
 {% block content %}
 <div>
-    <h2>Gantt Chart</h2>
+    <h2>Timeline</h2>
     <div style="margin: 20px 0;">
         <a href="/" style="color: #fff; margin-right: 10px;">Task List</a>
         <a href="/calendar" style="color: #fff; font-weight: bold; margin-right: 10px;">Timeline</a>
-        <a href="/history" style="color: #fff;">History</a>
+        <a href="/history" style="color: #fff; margin-right: 10px;">History</a>
+        <a href="/chat" style="color: #fff; margin-right: 10px;">Chat</a>
+        <a href="/settings" style="color: #fff;">Settings</a>
+    </div>
+    <div style="margin: 15px 0; padding: 10px 15px; background: rgba(255, 193, 7, 0.2); border-left: 4px solid #ffc107; border-radius: 5px;">
+        <span style="font-weight: bold;">Current Time:</span> <span id="current-time"></span>
+        <script>
+            function updateTime() {
+                const now = new Date();
+                document.getElementById('current-time').textContent = now.toLocaleString('en-US', {
+                    weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+            }
+            updateTime();
+            setInterval(updateTime, 1000);
+        </script>
     </div>
 
-    <div class="gantt-container" style="overflow-x: auto; margin-top: 20px;">
-        <div style="min-width: 800px;">
-            {% for task in tasks %}
+    <div class="timeline-container" style="margin-top: 20px; max-width: 900px;">
+        {% if tasks %}
+            {% set tasks_sorted = tasks|sort(attribute='scheduled_start_time') %}
+            {% for task in tasks_sorted %}
                 {% if task.scheduled_start_time and task.scheduled_end_time %}
-                {% include 'gantt_item.html' %}
+                    {% include 'timeline_item.html' %}
                 {% endif %}
             {% endfor %}
-        </div>
+        {% else %}
+            <p style="opacity: 0.6;">No scheduled tasks yet.</p>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

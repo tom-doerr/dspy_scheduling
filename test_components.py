@@ -2,10 +2,11 @@
 
 import pytest
 from datetime import datetime, timedelta
-from models import Task, GlobalContext, DSPyExecution, SessionLocal
+from models import Task, GlobalContext, DSPyExecution, ChatMessage, SessionLocal
 from repositories.task_repository import TaskRepository
 from repositories.context_repository import GlobalContextRepository
 from repositories.dspy_execution_repository import DSPyExecutionRepository
+from repositories.chat_repository import ChatRepository
 from services.task_service import _safe_fromisoformat
 
 
@@ -17,6 +18,7 @@ def db():
     session.query(Task).delete()
     session.query(GlobalContext).delete()
     session.query(DSPyExecution).delete()
+    session.query(ChatMessage).delete()
     session.commit()
     yield session
     session.close()
@@ -62,6 +64,59 @@ class TestTaskRepository:
         incomplete = repo.get_incomplete()
         assert len(incomplete) == 1
         assert incomplete[0].id == task1.id
+
+    def test_get_completed_tasks(self, db):
+        """Test getting completed tasks only."""
+        repo = TaskRepository(db)
+        now = datetime.now()
+
+        # Completed task with actual times
+        completed_task = repo.create(Task(
+            title="Completed",
+            actual_start_time=now - timedelta(hours=2),
+            actual_end_time=now - timedelta(hours=1),
+            completed=True
+        ))
+
+        # Incomplete task
+        incomplete_task = repo.create(Task(title="Incomplete", completed=False))
+
+        completed = repo.get_completed()
+        assert len(completed) == 1
+        assert completed[0].id == completed_task.id
+        assert completed[0].completed is True
+
+    def test_get_completed_ordering(self, db):
+        """Test completed tasks are ordered by actual_end_time desc (most recent first)."""
+        repo = TaskRepository(db)
+        now = datetime.now()
+
+        # Create tasks with different completion times
+        old_task = repo.create(Task(
+            title="Old",
+            actual_start_time=now - timedelta(days=3),
+            actual_end_time=now - timedelta(days=3),
+            completed=True
+        ))
+        recent_task = repo.create(Task(
+            title="Recent",
+            actual_start_time=now - timedelta(hours=2),
+            actual_end_time=now - timedelta(hours=1),
+            completed=True
+        ))
+        middle_task = repo.create(Task(
+            title="Middle",
+            actual_start_time=now - timedelta(days=1),
+            actual_end_time=now - timedelta(days=1),
+            completed=True
+        ))
+
+        completed = repo.get_completed()
+        assert len(completed) == 3
+        # Should be ordered most recent first
+        assert completed[0].id == recent_task.id
+        assert completed[1].id == middle_task.id
+        assert completed[2].id == old_task.id
 
 
 class TestGlobalContextRepository:
@@ -152,3 +207,91 @@ class TestTaskServiceHelpers:
         result = _safe_fromisoformat("2025-10-01", "test_field")
         assert result is not None
         assert result.year == 2025
+
+
+def test_schedule_checker_reprioritize_tasks(db):
+    """Test ScheduleChecker.reprioritize_tasks updates task priorities"""
+    from schedule_checker import ScheduleChecker
+    from scheduler import TimeSlotModule, PrioritizedTask
+    from repositories.task_repository import TaskRepository
+    from repositories.context_repository import GlobalContextRepository
+    from models import Task, GlobalContext
+    from unittest.mock import MagicMock
+
+    # Create test tasks
+    task1 = Task(title="Task 1", priority=0.0, completed=False)
+    task2 = Task(title="Task 2", priority=0.0, completed=False)
+    db.add_all([task1, task2])
+    db.commit()
+
+    # Create schedule checker
+    time_scheduler = TimeSlotModule()
+    checker = ScheduleChecker(time_scheduler)
+
+    # Mock the prioritizer result
+    mock_result = MagicMock()
+    mock_result.prioritized_tasks = [
+        PrioritizedTask(id=task1.id, title="Task 1", priority=7.5, reasoning="High importance"),
+        PrioritizedTask(id=task2.id, title="Task 2", priority=4.2, reasoning="Medium importance")
+    ]
+    checker._call_dspy_prioritizer = MagicMock(return_value=mock_result)
+
+    # Run reprioritization
+    task_repo = TaskRepository(db)
+    context_repo = GlobalContextRepository(db)
+    tasks_updated = checker.reprioritize_tasks(task_repo, context_repo)
+
+    # Verify
+    assert tasks_updated == 2
+    db.refresh(task1)
+    db.refresh(task2)
+    assert task1.priority == 7.5
+    assert task2.priority == 4.2
+
+
+class TestChatRepository:
+    """Test chat repository operations."""
+
+    def test_create_chat_message(self, db):
+        """Test creating a chat message."""
+        repo = ChatRepository(db)
+        msg = ChatMessage(
+            user_message="Hello",
+            assistant_response="Hi there!"
+        )
+        created = repo.create(msg)
+
+        assert created.id is not None
+        assert created.user_message == "Hello"
+        assert created.assistant_response == "Hi there!"
+        assert created.created_at is not None
+
+    def test_get_recent_messages(self, db):
+        """Test getting recent messages ordered by created_at desc."""
+        repo = ChatRepository(db)
+
+        # Create messages
+        msg1 = repo.create(ChatMessage(user_message="First", assistant_response="Response 1"))
+        msg2 = repo.create(ChatMessage(user_message="Second", assistant_response="Response 2"))
+        msg3 = repo.create(ChatMessage(user_message="Third", assistant_response="Response 3"))
+
+        recent = repo.get_recent(limit=2)
+        assert len(recent) == 2
+        # Should be ordered newest first
+        assert recent[0].id == msg3.id
+        assert recent[1].id == msg2.id
+
+    def test_delete_all_messages(self, db):
+        """Test deleting all chat messages."""
+        repo = ChatRepository(db)
+
+        # Create messages
+        repo.create(ChatMessage(user_message="Msg 1", assistant_response="Resp 1"))
+        repo.create(ChatMessage(user_message="Msg 2", assistant_response="Resp 2"))
+
+        count = repo.delete_all()
+        assert count == 2
+
+        # Verify all deleted
+        messages = repo.get_all()
+        assert len(messages) == 0

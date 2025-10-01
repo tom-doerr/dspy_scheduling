@@ -174,6 +174,36 @@ class TestActiveTaskTracker:
 
         expect(page.locator(".active-task-tracker")).not_to_contain_text("Complete Active Task")
 
+    def test_active_task_duration_display(self, page: Page):
+        """Test that active task tracker shows duration in correct format."""
+        page.goto("/")
+        page.fill('input[name="title"]', "Duration Test Task")
+        page.click('button[type="submit"]')
+
+        # Wait for Start button to appear (task created successfully)
+        start_button = page.locator('button:has-text("Start")').first
+        expect(start_button).to_be_visible(timeout=15000)
+        start_button.click()
+
+        # Wait for active task tracker (HTMX 5s poll + buffer)
+        page.wait_for_timeout(7000)
+
+        # Verify duration element exists
+        duration_element = page.locator("#active-task-duration")
+        expect(duration_element).to_be_visible(timeout=10000)
+
+        # Verify duration value element exists and has text
+        duration_value = page.locator("#duration-value")
+        expect(duration_value).to_be_visible()
+        duration_text = duration_value.text_content()
+
+        # Verify format is "Xh Ym"
+        assert "h" in duration_text and "m" in duration_text, f"Duration format should be 'Xh Ym', got: {duration_text}"
+
+        # Verify the start time data attribute exists
+        start_time_attr = duration_element.get_attribute("data-start-time")
+        assert start_time_attr is not None, "Duration element should have data-start-time attribute"
+
 
 class TestTimelineView:
     """Test timeline/calendar view functionality."""

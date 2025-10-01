@@ -17,7 +17,9 @@
                     border-radius: 5px; padding: 0 10px; display: flex; align-items: center; justify-content: center;
                     width: 100%; box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);">
             <span style="font-size: 0.85em; white-space: nowrap;">
-                {{ task.scheduled_start_time.strftime('%H:%M') }} - {{ task.scheduled_end_time.strftime('%H:%M') }}
+                {% set duration_seconds = (task.scheduled_end_time - task.scheduled_start_time).total_seconds() %}
+                {% set duration_hours = (duration_seconds / 3600) | round(1) %}
+                {{ task.scheduled_start_time.strftime('%H:%M') }} - {{ task.scheduled_end_time.strftime('%H:%M') }} ({{ duration_hours }}h)
             </span>
         </div>
     </div>

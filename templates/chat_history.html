@@ -1,0 +1,7 @@
+{% if messages %}
+    {% for msg in messages %}
+        {% include 'chat_message.html' %}
+    {% endfor %}
+{% else %}
+    <p style="text-align: center; color: rgba(255, 255, 255, 0.6); padding: 40px;">No chat history yet. Start a conversation!</p>
+{% endif %}
