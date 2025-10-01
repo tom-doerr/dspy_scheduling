@@ -21,7 +21,7 @@ def get_context_service(db: Session = Depends(get_db)):
 @router.get('/global-context', response_class=HTMLResponse)
 async def get_context(request: Request, service: ContextService = Depends(get_context_service)):
     context = service.get_context()
-    return templates.TemplateResponse('global_context.html', {'request': request, 'context': context})
+    return templates.TemplateResponse(request, 'global_context.html', {'context': context})
 
 
 @router.post('/global-context', response_class=HTMLResponse)
@@ -33,4 +33,4 @@ async def update_context(request: Request, context: str = Form(...), service: Co
         raise HTTPException(status_code=422, detail=str(e))
 
     context_text = service.update_context(context_data.context)
-    return templates.TemplateResponse('global_context.html', {'request': request, 'context': context_text})
+    return templates.TemplateResponse(request, 'global_context.html', {'context': context_text})

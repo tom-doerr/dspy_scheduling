@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from models import GlobalContext
 from typing import Optional
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ class GlobalContextRepository:
             self.db.commit()  # Release any locks
             context = self.db.query(GlobalContext).first()
             if not context:
-                context = GlobalContext(context="")
+                context = GlobalContext(singleton=True, context="")
                 self.db.add(context)
                 self.db.commit()
                 logger.debug("Created new GlobalContext")
@@ -36,11 +37,12 @@ class GlobalContextRepository:
         """Update global context"""
         context = self.get()
         if not context:
-            context = GlobalContext(context=context_text)
+            context = GlobalContext(singleton=True, context=context_text)
             self.db.add(context)
         else:
             # Refresh to prevent race conditions
             self.db.refresh(context)
             context.context = context_text
+            context.updated_at = datetime.now()
         self.db.commit()
         return context

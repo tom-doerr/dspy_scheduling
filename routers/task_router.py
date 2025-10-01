@@ -26,19 +26,19 @@ def get_task_service(db: Session = Depends(get_db)):
 @router.get('/tasks', response_class=HTMLResponse)
 async def get_tasks(request: Request, service: TaskService = Depends(get_task_service)):
     tasks = service.get_all_tasks()
-    return templates.TemplateResponse('tasks.html', {'request': request, 'tasks': tasks})
+    return templates.TemplateResponse(request, 'tasks.html', {'tasks': tasks})
 
 
 @router.get('/calendar', response_class=HTMLResponse)
 async def calendar_view(request: Request, service: TaskService = Depends(get_task_service)):
     tasks = service.get_scheduled_tasks()
-    return templates.TemplateResponse('calendar.html', {'request': request, 'tasks': tasks})
+    return templates.TemplateResponse(request, 'calendar.html', {'tasks': tasks})
 
 
 @router.get('/active-task', response_class=HTMLResponse)
 async def get_active_task(request: Request, service: TaskService = Depends(get_task_service)):
     task = service.get_active_task()
-    return templates.TemplateResponse('active_task.html', {'request': request, 'task': task})
+    return templates.TemplateResponse(request, 'active_task.html', {'task': task})
 
 
 @router.post('/tasks', response_class=HTMLResponse)
@@ -57,7 +57,7 @@ async def add_task(
         raise HTTPException(status_code=422, detail=str(e))
 
     task = service.create_task(task_data.title, task_data.description, task_data.context, task_data.due_date)
-    return templates.TemplateResponse('task_item.html', {'request': request, 'task': task})
+    return templates.TemplateResponse(request, 'task_item.html', {'task': task})
 
 
 @router.post('/tasks/{task_id}/start', response_class=HTMLResponse)
@@ -66,7 +66,7 @@ async def start_task(request: Request, task_id: int = Path(..., gt=0), service: 
         task = service.start_task(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
-        return templates.TemplateResponse('task_item.html', {'request': request, 'task': task})
+        return templates.TemplateResponse(request, 'task_item.html', {'task': task})
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -77,7 +77,7 @@ async def complete_task(request: Request, task_id: int = Path(..., gt=0), servic
         task = service.complete_task(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
-        return templates.TemplateResponse('task_item.html', {'request': request, 'task': task})
+        return templates.TemplateResponse(request, 'task_item.html', {'task': task})
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

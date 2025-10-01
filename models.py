@@ -1,6 +1,5 @@
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Float, Text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime
 
 Base = declarative_base()
@@ -25,6 +24,7 @@ class GlobalContext(Base):
     __tablename__ = 'global_context'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    singleton = Column(Boolean, default=True, unique=True, nullable=False)
     context = Column(Text, default='')
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 

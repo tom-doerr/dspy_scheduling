@@ -34,7 +34,9 @@ class TestTaskOperations:
         page.goto("/")
         page.fill('input[name="title"]', "Task to Start")
         page.click('button[type="submit"]')
-        page.wait_for_timeout(1000)
+
+        # Wait for "Task added" toast to disappear
+        page.wait_for_timeout(2500)
 
         start_button = page.locator('button:has-text("Start")').first
         start_button.click()
@@ -49,7 +51,9 @@ class TestTaskOperations:
         page.goto("/")
         page.fill('input[name="title"]', "Task to Complete")
         page.click('button[type="submit"]')
-        page.wait_for_timeout(1000)
+
+        # Wait for "Task added" toast to disappear
+        page.wait_for_timeout(2500)
 
         complete_button = page.locator('button:has-text("Complete")').first
         complete_button.click()
@@ -64,7 +68,9 @@ class TestTaskOperations:
         page.goto("/")
         page.fill('input[name="title"]', "Task to Delete")
         page.click('button[type="submit"]')
-        page.wait_for_timeout(1000)
+
+        # Wait for "Task added" toast to disappear
+        page.wait_for_timeout(2500)
 
         initial_count = page.locator(".task").count()
         delete_button = page.locator('button:has-text("Delete")').first
@@ -114,9 +120,11 @@ class TestGlobalContext:
     def test_update_global_context(self, page: Page):
         """Test updating global context."""
         page.goto("/")
-        page.wait_for_timeout(1000)
 
+        # Wait for global context section to load via HTMX
         context_section = page.locator('.section').filter(has_text="Global Context")
+        expect(context_section).to_be_visible(timeout=10000)
+
         context_textarea = context_section.locator('textarea[name="context"]')
         context_textarea.fill("I work 9am-5pm. Prefer mornings for deep work.")
 
@@ -171,7 +179,7 @@ class TestTimelineView:
         """Test that timeline view loads successfully."""
         page.goto("/calendar")
         expect(page.locator("h1")).to_contain_text("DSPy Task Scheduler")
-        expect(page.locator("h2")).to_contain_text("Timeline View")
+        expect(page.locator("h2")).to_contain_text("Gantt Chart")
 
     def test_timeline_displays_scheduled_task(self, page: Page):
         """Test that scheduled tasks appear in timeline view."""
@@ -187,7 +195,7 @@ class TestTimelineView:
         page.wait_for_timeout(500)
 
         # Check that task appears in timeline
-        expect(page.locator(".gantt-item")).to_be_visible()
+        expect(page.locator(".timeline-item")).to_be_visible()
         expect(page.locator(".gantt-item")).to_contain_text("Timeline Task Test")
 
     def test_timeline_shows_multiple_tasks(self, page: Page):
@@ -206,7 +214,7 @@ class TestTimelineView:
         page.wait_for_timeout(1000)
 
         # Check all tasks appear
-        gantt_items = page.locator(".gantt-item")
+        gantt_items = page.locator(".timeline-item")
         expect(gantt_items).to_have_count(3)
         for task_name in tasks:
             expect(page.locator(".gantt-item")).to_contain_text(task_name)
@@ -223,7 +231,7 @@ class TestTimelineView:
         page.wait_for_timeout(500)
 
         # Check that time information is displayed
-        gantt_item = page.locator(".gantt-item").first
+        gantt_item = page.locator(".timeline-item").first
         expect(gantt_item).to_be_visible()
         # Timeline should show time range
         html = gantt_item.inner_html()
@@ -235,7 +243,7 @@ class TestTimelineView:
         page.wait_for_timeout(500)
 
         # Should either show "No scheduled tasks" or have no gantt items
-        gantt_items = page.locator(".gantt-item")
+        gantt_items = page.locator(".timeline-item")
         if gantt_items.count() == 0:
             # Empty state is acceptable
             pass
@@ -282,6 +290,6 @@ class TestTimelineView:
         page.wait_for_timeout(1000)
 
         # All tasks should be present
-        gantt_items = page.locator(".gantt-item")
+        gantt_items = page.locator(".timeline-item")
         count = gantt_items.count()
         assert count == 3

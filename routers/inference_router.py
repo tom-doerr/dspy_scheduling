@@ -19,4 +19,4 @@ def get_inference_service(db: Session = Depends(get_db)):
 @router.get('/inference-log', response_class=HTMLResponse)
 async def get_inference_log(request: Request, service: InferenceService = Depends(get_inference_service)):
     executions = service.get_latest_executions()
-    return templates.TemplateResponse('inference_log.html', {'request': request, 'executions': executions})
+    return templates.TemplateResponse(request, 'inference_log.html', {'executions': executions})

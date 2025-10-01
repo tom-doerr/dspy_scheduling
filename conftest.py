@@ -38,7 +38,18 @@ def browser_context_args():
 
 @pytest.fixture
 def page(context: BrowserContext) -> Page:
-    """Create a new page for each test."""
+    """Create a new page for each test with database cleanup."""
+    # Clean database before each E2E test
+    from models import SessionLocal, Task, GlobalContext, DSPyExecution
+    db = SessionLocal()
+    try:
+        db.query(Task).delete()
+        db.query(GlobalContext).delete()
+        db.query(DSPyExecution).delete()
+        db.commit()
+    finally:
+        db.close()
+
     page = context.new_page()
     page.set_default_timeout(30000)
     yield page

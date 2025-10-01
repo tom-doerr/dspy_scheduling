@@ -234,22 +234,20 @@ def test_task_id_autoincrement(client, db_session):
     assert task2.id > task1.id
     assert task3.id > task2.id
 
-def test_global_context_id_autoincrement(client, db_session):
-    """Test that GlobalContext IDs auto-increment correctly"""
-    context1 = GlobalContext(context="Context 1")
-    context2 = GlobalContext(context="Context 2")
-
+def test_global_context_singleton_constraint(client, db_session):
+    """Test that only one GlobalContext can exist (singleton constraint)"""
+    context1 = GlobalContext(context="Context 1", singleton=True)
     db_session.add(context1)
     db_session.commit()
     db_session.refresh(context1)
 
+    # Attempting to create a second GlobalContext should fail
+    from sqlalchemy.exc import IntegrityError
+    context2 = GlobalContext(context="Context 2", singleton=True)
     db_session.add(context2)
-    db_session.commit()
-    db_session.refresh(context2)
 
-    assert context1.id is not None
-    assert context2.id is not None
-    assert context2.id > context1.id
+    with pytest.raises(IntegrityError):
+        db_session.commit()
 
 def test_dspy_execution_id_autoincrement(client, db_session):
     """Test that DSPyExecution IDs auto-increment correctly"""
@@ -291,7 +289,7 @@ def test_scheduled_task_serialization():
         end_time="2025-10-01T15:00:00"
     )
 
-    task_dict = task.dict()
+    task_dict = task.model_dump()
 
     assert "id" in task_dict
     assert task_dict["id"] == 456
@@ -422,7 +420,7 @@ def test_end_to_end_id_flow(client, db_session):
     assert any(s.id == db_task2_id for s in existing_schedule)
 
     # Verify IDs are preserved in dict serialization (for DSPy logging)
-    schedule_dicts = [s.dict() for s in existing_schedule]
+    schedule_dicts = [s.model_dump() for s in existing_schedule]
     assert all("id" in d for d in schedule_dicts)
     assert any(d["id"] == db_task1_id for d in schedule_dicts)
     assert any(d["id"] == db_task2_id for d in schedule_dicts)
@@ -565,3 +563,59 @@ def test_multiple_active_tasks_prevented(client, db_session):
 
     response = client.post(f"/tasks/{task2.id}/start")
     assert response.status_code == 400
+
+
+def test_config_validation_scheduler_interval():
+    """Test that config validates scheduler_interval_seconds is positive"""
+    import os
+    from config import Settings
+    from pydantic import ValidationError
+
+    original = os.environ.get('SCHEDULER_INTERVAL_SECONDS')
+
+    try:
+        os.environ['SCHEDULER_INTERVAL_SECONDS'] = '-5'
+        with pytest.raises(ValidationError):
+            Settings()
+    finally:
+        if original:
+            os.environ['SCHEDULER_INTERVAL_SECONDS'] = original
+        elif 'SCHEDULER_INTERVAL_SECONDS' in os.environ:
+            del os.environ['SCHEDULER_INTERVAL_SECONDS']
+
+
+def test_config_validation_fallback_hour():
+    """Test that config validates fallback_start_hour is in range 0-23"""
+    import os
+    from config import Settings
+    from pydantic import ValidationError
+
+    original = os.environ.get('FALLBACK_START_HOUR')
+
+    try:
+        os.environ['FALLBACK_START_HOUR'] = '25'
+        with pytest.raises(ValidationError):
+            Settings()
+    finally:
+        if original:
+            os.environ['FALLBACK_START_HOUR'] = original
+        elif 'FALLBACK_START_HOUR' in os.environ:
+            del os.environ['FALLBACK_START_HOUR']
+
+
+def test_health_endpoint_structure():
+    """Test that health endpoint returns proper structure"""
+    from fastapi.testclient import TestClient
+    from app import app
+
+    client = TestClient(app)
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "status" in data
+    assert "timestamp" in data
+    assert "components" in data
+    assert "database" in data["components"]
+    assert "dspy_scheduler" in data["components"]
+    assert "background_scheduler" in data["components"]

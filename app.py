@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
+from contextlib import asynccontextmanager
 import dspy
 from models import init_db
 from scheduler import PrioritizerModule, TimeSlotModule
@@ -16,7 +17,6 @@ from routers import task_router, context_router, inference_router
 logging.basicConfig(level=getattr(logging, settings.log_level))
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
 # Initialize database
@@ -32,15 +32,34 @@ time_scheduler = TimeSlotModule()
 schedule_checker_instance = ScheduleChecker(time_scheduler)
 schedule_checker._schedule_checker_instance = schedule_checker_instance
 
-# Initialize background scheduler
+# Global scheduler reference
 bg_scheduler = None
-if settings.scheduler_enabled:
-    bg_scheduler = BackgroundScheduler()
-    bg_scheduler.add_job(schedule_checker_instance.check_and_update_schedule, 'interval', seconds=settings.scheduler_interval_seconds)
-    bg_scheduler.start()
-    logger.info(f"Background scheduler started (interval: {settings.scheduler_interval_seconds}s)")
-else:
-    logger.info("Background scheduler disabled")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown"""
+    global bg_scheduler
+
+    # Startup
+    logger.info("Starting application...")
+    if settings.scheduler_enabled:
+        bg_scheduler = BackgroundScheduler()
+        bg_scheduler.add_job(schedule_checker_instance.check_and_update_schedule, 'interval', seconds=settings.scheduler_interval_seconds)
+        bg_scheduler.start()
+        logger.info(f"Background scheduler started (interval: {settings.scheduler_interval_seconds}s)")
+    else:
+        logger.info("Background scheduler disabled")
+
+    yield
+
+    # Shutdown
+    if bg_scheduler is not None:
+        logger.info("Shutting down background scheduler...")
+        bg_scheduler.shutdown()
+        logger.info("Background scheduler shut down successfully")
+
+# Create FastAPI app with lifespan
+app = FastAPI(lifespan=lifespan)
 
 # Include routers
 app.include_router(task_router.router)
@@ -50,7 +69,7 @@ app.include_router(inference_router.router)
 
 @app.get('/', response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse('index.html', {'request': request})
+    return templates.TemplateResponse(request, 'index.html')
 
 
 @app.get('/health')
@@ -96,16 +115,6 @@ async def health_check():
         health_status["components"]["background_scheduler"] = f"error: {str(e)}"
 
     return health_status
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Shutdown event handler to clean up resources"""
-    global bg_scheduler
-    if bg_scheduler is not None:
-        logger.info("Shutting down background scheduler...")
-        bg_scheduler.shutdown()
-        logger.info("Background scheduler shut down successfully")
 
 
 if __name__ == '__main__':

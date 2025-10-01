@@ -10,8 +10,8 @@ class DSPyExecutionRepository:
         self.db = db
 
     def get_latest(self, limit: int = 50) -> List[DSPyExecution]:
-        """Get latest executions ordered by creation time (oldest first)"""
-        return self.db.query(DSPyExecution).order_by(DSPyExecution.created_at.asc()).limit(limit).all()
+        """Get latest executions ordered by creation time (newest first)"""
+        return self.db.query(DSPyExecution).order_by(DSPyExecution.created_at.desc()).limit(limit).all()
 
     def create(self, execution: DSPyExecution) -> DSPyExecution:
         """Create a new execution record"""
