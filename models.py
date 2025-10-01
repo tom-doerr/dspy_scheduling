@@ -18,6 +18,7 @@ class Task(Base):
     actual_end_time = Column(DateTime, nullable=True)
     priority = Column(Float, default=0.0)
     completed = Column(Boolean, default=False)
+    needs_scheduling = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.now)
 
 class GlobalContext(Base):

@@ -97,8 +97,18 @@ class ScheduleChecker:
 
             now = datetime.now()
             tasks_rescheduled = 0
+            tasks_scheduled = 0
 
-            # Get all incomplete tasks using repository
+            # First, schedule any tasks that need DSPy scheduling
+            tasks_needing_scheduling = task_repo.get_tasks_needing_scheduling()
+            for task in tasks_needing_scheduling:
+                logger.info(f"🎯 Task '{task.title}' needs initial scheduling...")
+                self.reschedule_task(task_repo, context_repo, task, now)
+                task.needs_scheduling = False
+                task_repo.db.commit()
+                tasks_scheduled += 1
+
+            # Then, check for tasks that need rescheduling
             all_tasks = task_repo.get_incomplete()
 
             for task in all_tasks:
@@ -115,14 +125,16 @@ class ScheduleChecker:
                     self.reschedule_task(task_repo, context_repo, task, now)
                     tasks_rescheduled += 1
 
+            if tasks_scheduled > 0:
+                logger.info(f"🎯 Scheduled {tasks_scheduled} new task(s)")
             if tasks_rescheduled > 0:
                 logger.info(f"🔄 Rescheduled {tasks_rescheduled} task(s)")
-            else:
+            if tasks_scheduled == 0 and tasks_rescheduled == 0:
                 logger.info("✅ Schedule is up to date")
 
             logger.info("🔍 Schedule Check COMPLETED")
 
-            return tasks_rescheduled
+            return tasks_rescheduled + tasks_scheduled
         finally:
             db.close()
 

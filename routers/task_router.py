@@ -35,6 +35,12 @@ async def calendar_view(request: Request, service: TaskService = Depends(get_tas
     return templates.TemplateResponse(request, 'calendar.html', {'tasks': tasks})
 
 
+@router.get('/history', response_class=HTMLResponse)
+async def history_view(request: Request, service: TaskService = Depends(get_task_service)):
+    tasks = service.get_completed_tasks()
+    return templates.TemplateResponse(request, 'history.html', {'tasks': tasks})
+
+
 @router.get('/active-task', response_class=HTMLResponse)
 async def get_active_task(request: Request, service: TaskService = Depends(get_task_service)):
     task = service.get_active_task()
@@ -64,6 +70,17 @@ async def add_task(
 async def start_task(request: Request, task_id: int = Path(..., gt=0), service: TaskService = Depends(get_task_service)):
     try:
         task = service.start_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return templates.TemplateResponse(request, 'task_item.html', {'task': task})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post('/tasks/{task_id}/stop', response_class=HTMLResponse)
+async def stop_task(request: Request, task_id: int = Path(..., gt=0), service: TaskService = Depends(get_task_service)):
+    try:
+        task = service.stop_task(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
         return templates.TemplateResponse(request, 'task_item.html', {'task': task})

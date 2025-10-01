@@ -51,6 +51,9 @@ def track_dspy_execution(module_name: str, **input_params):
             )
             db.add(execution)
             db.commit()
+        except Exception as e:
+            logger.error(f"Failed to store DSPy execution for {module_name}: {e}")
+            db.rollback()
         finally:
             db.close()
 

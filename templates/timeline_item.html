@@ -1,11 +1,19 @@
 <div class="timeline-item" style="margin: 10px 0; padding: 15px; border-left: 4px solid {% if task.completed %}#666{% else %}#4CAF50{% endif %}; background: rgba(255, 255, 255, 0.1); border-radius: 5px;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div style="flex: 1;">
-            <h3 style="margin: 0 0 5px 0;">{{ task.title }}</h3>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                <h3 style="margin: 0;">{{ task.title }}</h3>
+                <span style="padding: 3px 8px; border-radius: 3px; font-size: 0.75em; font-weight: bold;
+                             {% if task.priority >= 7.0 %}background: rgba(255, 87, 51, 0.2); color: #ff5733; border: 1px solid rgba(255, 87, 51, 0.5);
+                             {% elif task.priority >= 4.0 %}background: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid rgba(255, 193, 7, 0.5);
+                             {% else %}background: rgba(76, 175, 80, 0.2); color: #4CAF50; border: 1px solid rgba(76, 175, 80, 0.5);{% endif %}">
+                    P{{ task.priority }}
+                </span>
+            </div>
             <div style="font-size: 0.9em; opacity: 0.8;">
-                <span>{{ task.start_time.strftime('%Y-%m-%d %H:%M') }}</span>
+                <span>{{ task.scheduled_start_time.strftime('%Y-%m-%d %H:%M') }}</span>
                 <span style="margin: 0 10px;">→</span>
-                <span>{{ task.end_time.strftime('%Y-%m-%d %H:%M') }}</span>
+                <span>{{ task.scheduled_end_time.strftime('%Y-%m-%d %H:%M') }}</span>
             </div>
         </div>
         <div>

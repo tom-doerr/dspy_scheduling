@@ -1,0 +1,48 @@
+<div class="history-item" style="display: flex; flex-direction: column; margin: 15px 0; padding: 15px; border-radius: 8px; background: rgba(255, 255, 255, 0.05);">
+    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+        <div style="flex: 1;">
+            <div style="font-weight: bold; font-size: 1.1em; margin-bottom: 5px;">
+                {{ task.title }}
+            </div>
+            {% if task.description %}
+            <div style="color: rgba(255, 255, 255, 0.7); font-size: 0.9em; margin-bottom: 5px;">
+                {{ task.description }}
+            </div>
+            {% endif %}
+        </div>
+        <div style="text-align: right; color: rgba(255, 255, 255, 0.6); font-size: 0.85em;">
+            {{ task.actual_end_time.strftime('%Y-%m-%d') }}
+        </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 15px;">
+        <div style="flex: 1; position: relative; height: 40px; background: rgba(255, 255, 255, 0.1); border-radius: 5px; overflow: hidden;">
+            <div style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); height: 30px;
+                        background: linear-gradient(90deg, #4CAF50, #45a049);
+                        border-radius: 5px; padding: 0 10px; display: flex; align-items: center; justify-content: center;
+                        width: 100%; box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);">
+                <span style="font-size: 0.85em; white-space: nowrap;">
+                    {{ task.actual_start_time.strftime('%H:%M') }} - {{ task.actual_end_time.strftime('%H:%M') }}
+                </span>
+            </div>
+        </div>
+
+        <div style="min-width: 80px; text-align: center; color: rgba(255, 255, 255, 0.8);">
+            {% set duration_seconds = (task.actual_end_time - task.actual_start_time).total_seconds() %}
+            {% set hours = (duration_seconds // 3600)|int %}
+            {% set minutes = ((duration_seconds % 3600) // 60)|int %}
+            <div style="font-size: 1.2em; font-weight: bold;">
+                {% if hours > 0 %}{{ hours }}h {% endif %}{{ minutes }}m
+            </div>
+            <div style="font-size: 0.75em; color: rgba(255, 255, 255, 0.5);">
+                duration
+            </div>
+        </div>
+    </div>
+
+    {% if task.context %}
+    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.1); font-size: 0.85em; color: rgba(255, 255, 255, 0.6);">
+        <strong>Context:</strong> {{ task.context }}
+    </div>
+    {% endif %}
+</div>

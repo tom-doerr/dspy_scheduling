@@ -619,3 +619,224 @@ def test_health_endpoint_structure():
     assert "database" in data["components"]
     assert "dspy_scheduler" in data["components"]
     assert "background_scheduler" in data["components"]
+
+
+# Priority Setting Tests
+
+def test_task_priority_default_value(db_session):
+    """Test that new tasks have default priority of 0.0"""
+    task = Task(
+        title="Test Task",
+        description="Test description"
+    )
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
+
+    assert task.priority == 0.0
+
+
+def test_task_priority_can_be_set(db_session):
+    """Test that task priority can be set to a specific value"""
+    task = Task(
+        title="High Priority Task",
+        priority=8.5
+    )
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
+
+    assert task.priority == 8.5
+
+
+def test_task_priority_update(db_session):
+    """Test that task priority can be updated"""
+    task = Task(title="Task", priority=5.0)
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
+
+    task.priority = 9.0
+    db_session.commit()
+    db_session.refresh(task)
+
+    assert task.priority == 9.0
+
+
+def test_task_priority_range_values(db_session):
+    """Test that task priority accepts values in 0-10 range"""
+    # Test min value
+    task1 = Task(title="Min Priority", priority=0.0)
+    db_session.add(task1)
+
+    # Test max value
+    task2 = Task(title="Max Priority", priority=10.0)
+    db_session.add(task2)
+
+    # Test mid value
+    task3 = Task(title="Mid Priority", priority=5.5)
+    db_session.add(task3)
+
+    db_session.commit()
+    db_session.refresh(task1)
+    db_session.refresh(task2)
+    db_session.refresh(task3)
+
+    assert task1.priority == 0.0
+    assert task2.priority == 10.0
+    assert task3.priority == 5.5
+
+
+def test_task_priority_sorting(db_session):
+    """Test that tasks can be sorted by priority"""
+    task1 = Task(title="Low", priority=2.0)
+    task2 = Task(title="High", priority=9.0)
+    task3 = Task(title="Medium", priority=5.0)
+
+    db_session.add_all([task1, task2, task3])
+    db_session.commit()
+
+    tasks = db_session.query(Task).order_by(Task.priority.desc()).all()
+
+    assert len(tasks) == 3
+    assert tasks[0].title == "High"
+    assert tasks[0].priority == 9.0
+    assert tasks[1].title == "Medium"
+    assert tasks[1].priority == 5.0
+    assert tasks[2].title == "Low"
+    assert tasks[2].priority == 2.0
+
+
+def test_task_priority_negative_value(db_session):
+    """Test that negative priority values are allowed (database accepts floats)"""
+    task = Task(title="Negative Priority", priority=-1.0)
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
+
+    assert task.priority == -1.0
+
+
+def test_task_priority_above_ten(db_session):
+    """Test that priority values above 10 are allowed (database accepts floats)"""
+    task = Task(title="Above Max", priority=15.0)
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
+
+    assert task.priority == 15.0
+
+
+def test_prioritized_task_model_validation():
+    """Test PrioritizedTask Pydantic model validates priority range (0-10)"""
+    from scheduler import PrioritizedTask
+    from pydantic import ValidationError
+
+    # Valid priority
+    task = PrioritizedTask(
+        id=1,
+        title="Valid Task",
+        priority=7.5,
+        reasoning="High importance"
+    )
+    assert task.priority == 7.5
+    assert task.reasoning == "High importance"
+
+    # Test min boundary
+    task_min = PrioritizedTask(id=2, title="Min", priority=0.0, reasoning="Lowest")
+    assert task_min.priority == 0.0
+
+    # Test max boundary
+    task_max = PrioritizedTask(id=3, title="Max", priority=10.0, reasoning="Highest")
+    assert task_max.priority == 10.0
+
+    # Test below range (should fail)
+    try:
+        PrioritizedTask(id=4, title="Below", priority=-1.0, reasoning="Invalid")
+        assert False, "Should have raised ValidationError"
+    except ValidationError:
+        pass
+
+    # Test above range (should fail)
+    try:
+        PrioritizedTask(id=5, title="Above", priority=11.0, reasoning="Invalid")
+        assert False, "Should have raised ValidationError"
+    except ValidationError:
+        pass
+
+
+def test_task_input_model():
+    """Test TaskInput Pydantic model for priority setting"""
+    from scheduler import TaskInput
+
+    # Basic task input
+    task = TaskInput(id=1, title="Test Task", description="Test description")
+    assert task.id == 1
+    assert task.title == "Test Task"
+    assert task.description == "Test description"
+    assert task.due_date is None
+
+    # Task with due date
+    task_with_due = TaskInput(
+        id=2,
+        title="Urgent Task",
+        description="Important",
+        due_date="2025-10-15T10:00:00"
+    )
+    assert task_with_due.due_date == "2025-10-15T10:00:00"
+
+
+def test_task_priority_filter_high(db_session):
+    """Test filtering tasks by priority threshold"""
+    task1 = Task(title="Low Priority", priority=2.0)
+    task2 = Task(title="Medium Priority", priority=5.0)
+    task3 = Task(title="High Priority", priority=8.5)
+    task4 = Task(title="Critical Priority", priority=9.5)
+
+    db_session.add_all([task1, task2, task3, task4])
+    db_session.commit()
+
+    # Get high priority tasks (>=7.0)
+    high_priority_tasks = db_session.query(Task).filter(Task.priority >= 7.0).all()
+
+    assert len(high_priority_tasks) == 2
+    titles = [t.title for t in high_priority_tasks]
+    assert "High Priority" in titles
+    assert "Critical Priority" in titles
+
+
+def test_task_priority_persists_after_other_updates(db_session):
+    """Test that priority value persists when other fields are updated"""
+    task = Task(title="Task", priority=7.0)
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
+
+    # Update other fields
+    task.description = "Updated description"
+    task.completed = True
+    db_session.commit()
+    db_session.refresh(task)
+
+    # Priority should remain unchanged
+    assert task.priority == 7.0
+    assert task.description == "Updated description"
+    assert task.completed is True
+
+
+def test_multiple_tasks_different_priorities(db_session):
+    """Test that multiple tasks can have different priority values"""
+    tasks = [
+        Task(title=f"Task {i}", priority=float(i))
+        for i in range(11)  # 0 through 10
+    ]
+
+    db_session.add_all(tasks)
+    db_session.commit()
+
+    retrieved_tasks = db_session.query(Task).order_by(Task.priority).all()
+
+    assert len(retrieved_tasks) == 11
+    for i, task in enumerate(retrieved_tasks):
+        assert task.priority == float(i)
+        assert task.title == f"Task {i}"

@@ -26,9 +26,17 @@ class TaskRepository:
         """Get all tasks with scheduled times"""
         return self.db.query(Task).filter(Task.scheduled_start_time.isnot(None)).order_by(Task.scheduled_start_time).all()
 
+    def get_tasks_needing_scheduling(self) -> List[Task]:
+        """Get all tasks that need DSPy scheduling"""
+        return self.db.query(Task).filter(Task.needs_scheduling == True, Task.completed == False).all()
+
     def get_active(self) -> Optional[Task]:
         """Get currently active task"""
         return self.db.query(Task).filter(Task.actual_start_time.isnot(None), Task.completed == False).first()
+
+    def get_completed(self) -> List[Task]:
+        """Get all completed tasks ordered by actual end time (most recent first)"""
+        return self.db.query(Task).filter(Task.completed == True).order_by(Task.actual_end_time.desc()).all()
 
     def create(self, task: Task) -> Task:
         """Create a new task"""
@@ -57,6 +65,21 @@ class TaskRepository:
                 raise ValueError(f"Cannot start task: Another task '{active_task.title}' is already active")
             task.actual_start_time = datetime.now()
             self.db.commit()
+        return task
+
+    def stop_task(self, task: Task) -> Task:
+        """Stop a task by clearing actual_start_time"""
+        self.db.refresh(task)
+
+        # Validate task state
+        if task.completed:
+            raise ValueError(f"Cannot stop task: Task '{task.title}' is already completed")
+
+        if not task.actual_start_time:
+            raise ValueError(f"Cannot stop task: Task '{task.title}' is not started")
+
+        task.actual_start_time = None
+        self.db.commit()
         return task
 
     def complete_task(self, task: Task) -> Task:

@@ -42,6 +42,10 @@ class TaskService:
         """Get active task"""
         return self.task_repo.get_active()
 
+    def get_completed_tasks(self) -> List[Task]:
+        """Get completed tasks"""
+        return self.task_repo.get_completed()
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
@@ -60,24 +64,51 @@ class TaskService:
         )
 
     def create_task(self, title: str, description: str, context: str, due_date: Optional[str]) -> Task:
-        """Create a new task with DSPy scheduling
+        """Create a new task immediately with fallback scheduling (fast response)
 
-        Note: DSPy execution tracking uses a separate session for isolation.
-        All database operations within this method use the same transaction.
+        Tasks are created with temporary fallback times and marked needs_scheduling=True.
+        Background scheduler will pick them up and apply DSPy scheduling asynchronously.
+        This allows rapid task entry without waiting for AI scheduling.
         """
+        fallback_start = datetime.now().replace(
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0
+        ) + timedelta(hours=settings.fallback_start_hour)
+        if fallback_start < datetime.now():
+            fallback_start = fallback_start + timedelta(days=1)
+
+        fallback_end = fallback_start + timedelta(hours=settings.fallback_duration_hours)
+
+        task = Task(
+            title=title,
+            description=description,
+            context=context,
+            due_date=_safe_fromisoformat(due_date, "due_date"),
+            scheduled_start_time=fallback_start,
+            scheduled_end_time=fallback_end,
+            needs_scheduling=True
+        )
+
+        logger.info(f"Creating task '{title}' with fallback times (will be scheduled in background)")
+        return self.task_repo.create(task)
+
+    def schedule_task_with_dspy(self, task: Task) -> Task:
+        """Schedule a task using DSPy (called by background scheduler)"""
         try:
             current_datetime = datetime.now().isoformat()
             existing_tasks = self.task_repo.get_scheduled()
             existing_schedule = [
                 ScheduledTask(id=t.id, title=t.title, start_time=str(t.scheduled_start_time), end_time=str(t.scheduled_end_time))
-                for t in existing_tasks
+                for t in existing_tasks if t.id != task.id
             ]
 
             global_context = self.context_repo.get_or_create().context or ""
 
             result = self._call_dspy_scheduler(
-                new_task=title,
-                task_context=context,
+                new_task=task.title,
+                task_context=task.context or "",
                 global_context=global_context,
                 current_datetime=current_datetime,
                 existing_schedule=existing_schedule
@@ -85,27 +116,30 @@ class TaskService:
 
             logger.info(f"📤 OUTPUT - Start: {result.start_time}, End: {result.end_time}")
 
-            task = Task(
-                title=title,
-                description=description,
-                context=context,
-                due_date=_safe_fromisoformat(due_date, "due_date"),
-                scheduled_start_time=_safe_fromisoformat(result.start_time, "start_time"),
-                scheduled_end_time=_safe_fromisoformat(result.end_time, "end_time")
-            )
+            task.scheduled_start_time = _safe_fromisoformat(result.start_time, "start_time")
+            task.scheduled_end_time = _safe_fromisoformat(result.end_time, "end_time")
+            task.needs_scheduling = False
 
-            return self.task_repo.create(task)
+            return task
 
         except Exception as e:
-            # Repository handles rollback automatically on exception
-            logger.error(f"Failed to create task '{title}': {e}")
-            return self._create_fallback_task(title, description, context, due_date)
+            logger.error(f"Failed to schedule task '{task.title}': {e}")
+            # Keep fallback times, just mark as no longer needing scheduling
+            task.needs_scheduling = False
+            return task
 
     def start_task(self, task_id: int) -> Optional[Task]:
         """Start a task"""
         task = self.task_repo.get_by_id(task_id)
         if task:
             return self.task_repo.start_task(task)
+        return None
+
+    def stop_task(self, task_id: int) -> Optional[Task]:
+        """Stop a task"""
+        task = self.task_repo.get_by_id(task_id)
+        if task:
+            return self.task_repo.stop_task(task)
         return None
 
     def complete_task(self, task_id: int) -> Optional[Task]:
@@ -122,27 +156,3 @@ class TaskService:
             self.task_repo.delete(task)
             return True
         return False
-
-    def _create_fallback_task(self, title: str, description: str, context: str, due_date: Optional[str]) -> Task:
-        """Create task with fallback scheduling when DSPy fails"""
-        fallback_start = datetime.now().replace(
-            hour=settings.fallback_start_hour,
-            minute=0,
-            second=0,
-            microsecond=0
-        )
-        if fallback_start < datetime.now():
-            fallback_start = fallback_start + timedelta(days=1)
-
-        fallback_end = fallback_start + timedelta(hours=settings.fallback_duration_hours)
-
-        task = Task(
-            title=title,
-            description=description,
-            context=context,
-            due_date=_safe_fromisoformat(due_date, "due_date"),
-            scheduled_start_time=fallback_start,
-            scheduled_end_time=fallback_end
-        )
-
-        return self.task_repo.create(task)

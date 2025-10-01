@@ -1,5 +1,13 @@
 <div class="task {% if task.completed %}completed{% endif %}" id="task-{{ task.id }}">
-    <h3>{{ task.title }} (Priority: {{ task.priority }})</h3>
+    <div style="display: flex; justify-content: space-between; align-items: start;">
+        <h3 style="margin: 0 10px 0 0;">{{ task.title }}</h3>
+        <span style="padding: 4px 10px; border-radius: 4px; font-size: 0.85em; font-weight: bold; white-space: nowrap;
+                     {% if task.priority >= 7.0 %}background: rgba(255, 87, 51, 0.2); color: #ff5733; border: 1px solid rgba(255, 87, 51, 0.5);
+                     {% elif task.priority >= 4.0 %}background: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid rgba(255, 193, 7, 0.5);
+                     {% else %}background: rgba(76, 175, 80, 0.2); color: #4CAF50; border: 1px solid rgba(76, 175, 80, 0.5);{% endif %}">
+            Priority: {{ task.priority }}
+        </span>
+    </div>
     <p>{{ task.description }}</p>
     {% if task.scheduled_start_time and task.scheduled_end_time %}
         <small style="display: block;">Scheduled: {{ task.scheduled_start_time.strftime('%Y-%m-%d %H:%M') }} → {{ task.scheduled_end_time.strftime('%Y-%m-%d %H:%M') }}</small>
@@ -14,6 +22,14 @@
                 hx-swap="outerHTML"
                 hx-on::after-request="showToast('✓ Task started')">
             Start
+        </button>
+        {% endif %}
+        {% if task.actual_start_time and not task.completed %}
+        <button hx-post="/tasks/{{ task.id }}/stop"
+                hx-target="#task-{{ task.id }}"
+                hx-swap="outerHTML"
+                hx-on::after-request="showToast('✓ Task stopped')">
+            Stop
         </button>
         {% endif %}
         <button hx-post="/tasks/{{ task.id }}/complete"
