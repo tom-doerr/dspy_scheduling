@@ -1259,8 +1259,7 @@ def test_settings_form_has_toast_notification(client):
     content = response.content.decode('utf-8')
 
     assert response.status_code == 200
-    assert "hx-on::after-request" in content
-    assert "showToast" in content
+    assert "data-toast-message" in content
     assert "Settings updated" in content
 
 

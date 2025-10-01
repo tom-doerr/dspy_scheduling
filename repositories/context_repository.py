@@ -19,19 +19,28 @@ class GlobalContextRepository:
         return self.db.query(GlobalContext).first()
 
     def get_or_create(self) -> GlobalContext:
-        """Get or create global context with row locking to prevent race conditions"""
-        # Use FOR UPDATE to lock the row and prevent concurrent creates
-        context = self.db.query(GlobalContext).with_for_update().first()
-        if not context:
-            # Check again without lock in case another transaction just created it
-            self.db.commit()  # Release any locks
+        """Get or create global context with proper race condition handling"""
+        # First, try to get existing context
+        context = self.db.query(GlobalContext).first()
+        if context:
+            return context
+
+        # No context exists, try to create it
+        try:
+            context = GlobalContext(singleton=True, context="")
+            self.db.add(context)
+            self.db.commit()
+            logger.debug("Created new GlobalContext")
+            return context
+        except IntegrityError:
+            # Another transaction created it concurrently
+            self.db.rollback()
             context = self.db.query(GlobalContext).first()
             if not context:
-                context = GlobalContext(singleton=True, context="")
-                self.db.add(context)
-                self.db.commit()
-                logger.debug("Created new GlobalContext")
-        return context
+                # This should never happen, but handle it gracefully
+                raise RuntimeError("Failed to get or create GlobalContext")
+            logger.debug("GlobalContext was created by concurrent transaction")
+            return context
 
     def update(self, context_text: str) -> GlobalContext:
         """Update global context"""

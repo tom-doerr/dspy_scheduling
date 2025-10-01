@@ -59,7 +59,7 @@
 
         <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
             {% if not task.completed %}
-            <button hx-post="/tasks/{{ task.id }}/complete" hx-target="#task-modal" hx-swap="outerHTML" data-toast-message="✓ Completed">Complete</button>
+            <button hx-post="/tasks/{{ task.id }}/complete" hx-on:htmx:afterRequest="closeModal(); showToast('✓ Completed')">Complete</button>
             {% endif %}
             <button hx-delete="/tasks/{{ task.id }}" hx-on:htmx:afterRequest="closeModal(); showToast('✓ Deleted')" style="background: rgba(255, 87, 51, 0.2);">Delete</button>
             <button onclick="closeModal()" style="margin-left: auto;">Close</button>

@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Float, Text
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Float, Text, Index
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime
 
@@ -6,6 +6,12 @@ Base = declarative_base()
 
 class Task(Base):
     __tablename__ = 'tasks'
+    __table_args__ = (
+        Index('ix_tasks_completed', 'completed'),
+        Index('ix_tasks_scheduled_start', 'scheduled_start_time'),
+        Index('ix_tasks_needs_scheduling', 'needs_scheduling'),
+        Index('ix_tasks_actual_start', 'actual_start_time'),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     title = Column(String(200), nullable=False)
