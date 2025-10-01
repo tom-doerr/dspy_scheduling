@@ -490,3 +490,126 @@ class TestChatRepository:
         # Verify all deleted
         messages = repo.get_all()
         assert len(messages) == 0
+
+
+class TestAuditRecordArchival:
+    """Test audit record archival functionality."""
+
+    def test_delete_old_dspy_executions(self, db):
+        """Test deleting old DSPy execution records."""
+        repo = DSPyExecutionRepository(db)
+
+        # Create old and recent records
+        old_date = datetime.now() - timedelta(days=35)
+        recent_date = datetime.now() - timedelta(days=5)
+
+        # Old records (should be deleted)
+        old1 = DSPyExecution(
+            module_name="TimeSlotModule",
+            inputs="old input 1",
+            outputs="old output 1",
+            duration_ms=100.0,
+            created_at=old_date
+        )
+        old2 = DSPyExecution(
+            module_name="PrioritizerModule",
+            inputs="old input 2",
+            outputs="old output 2",
+            duration_ms=150.0,
+            created_at=old_date
+        )
+
+        # Recent records (should be kept)
+        recent1 = DSPyExecution(
+            module_name="TimeSlotModule",
+            inputs="recent input",
+            outputs="recent output",
+            duration_ms=120.0,
+            created_at=recent_date
+        )
+
+        repo.create(old1)
+        repo.create(old2)
+        repo.create(recent1)
+
+        # Delete records older than 30 days
+        deleted_count = repo.delete_old_records(retention_days=30)
+        assert deleted_count == 2
+
+        # Verify only recent records remain
+        remaining = repo.get_latest(limit=10)
+        assert len(remaining) == 1
+        assert remaining[0].inputs == "recent input"
+
+    def test_delete_old_chat_messages(self, db):
+        """Test deleting old chat messages."""
+        repo = ChatRepository(db)
+
+        # Create old and recent messages
+        old_date = datetime.now() - timedelta(days=40)
+        recent_date = datetime.now() - timedelta(days=10)
+
+        # Old messages (should be deleted)
+        old1 = ChatMessage(
+            user_message="Old user msg 1",
+            assistant_response="Old assistant resp 1",
+            created_at=old_date
+        )
+        old2 = ChatMessage(
+            user_message="Old user msg 2",
+            assistant_response="Old assistant resp 2",
+            created_at=old_date
+        )
+
+        # Recent messages (should be kept)
+        recent1 = ChatMessage(
+            user_message="Recent user msg",
+            assistant_response="Recent assistant resp",
+            created_at=recent_date
+        )
+
+        repo.create(old1)
+        repo.create(old2)
+        repo.create(recent1)
+
+        # Delete messages older than 30 days
+        deleted_count = repo.delete_old_records(retention_days=30)
+        assert deleted_count == 2
+
+        # Verify only recent messages remain
+        remaining = repo.get_all()
+        assert len(remaining) == 1
+        assert remaining[0].user_message == "Recent user msg"
+
+    def test_delete_old_records_none_to_delete(self, db):
+        """Test delete_old_records when no old records exist."""
+        dspy_repo = DSPyExecutionRepository(db)
+        chat_repo = ChatRepository(db)
+
+        # Create only recent records
+        recent_date = datetime.now() - timedelta(days=5)
+
+        dspy_repo.create(DSPyExecution(
+            module_name="TimeSlotModule",
+            inputs="input",
+            outputs="output",
+            duration_ms=100.0,
+            created_at=recent_date
+        ))
+
+        chat_repo.create(ChatMessage(
+            user_message="User msg",
+            assistant_response="Assistant resp",
+            created_at=recent_date
+        ))
+
+        # Delete old records (should delete nothing)
+        dspy_deleted = dspy_repo.delete_old_records(retention_days=30)
+        chat_deleted = chat_repo.delete_old_records(retention_days=30)
+
+        assert dspy_deleted == 0
+        assert chat_deleted == 0
+
+        # Verify records still exist
+        assert len(dspy_repo.get_latest(10)) == 1
+        assert len(chat_repo.get_all()) == 1

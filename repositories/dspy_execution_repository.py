@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from models import DSPyExecution
 from typing import List
+from datetime import datetime, timedelta
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,3 +23,19 @@ class DSPyExecutionRepository:
         self.db.commit()
         logger.debug(f"Logged DSPy execution: {execution.module_name} ({execution.duration_ms:.2f}ms)")
         return execution
+
+    def delete_old_records(self, retention_days: int) -> int:
+        """Delete records older than retention_days. Returns count of deleted records."""
+        cutoff_date = datetime.now() - timedelta(days=retention_days)
+        try:
+            count = self.db.query(DSPyExecution).filter(
+                DSPyExecution.created_at < cutoff_date
+            ).delete()
+            self.db.commit()
+            if count > 0:
+                logger.info(f"Deleted {count} old DSPyExecution records (older than {retention_days} days)")
+            return count
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Failed to delete old DSPyExecution records: {e}")
+            raise

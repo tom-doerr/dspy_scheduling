@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from models import ChatMessage
 from typing import List
+from datetime import datetime, timedelta
 import logging
 
 logger = logging.getLogger(__name__)
@@ -35,3 +36,19 @@ class ChatRepository:
         self.db.commit()
         logger.info(f"Deleted all chat messages (count={count})")
         return count
+
+    def delete_old_records(self, retention_days: int) -> int:
+        """Delete records older than retention_days. Returns count of deleted records."""
+        cutoff_date = datetime.now() - timedelta(days=retention_days)
+        try:
+            count = self.db.query(ChatMessage).filter(
+                ChatMessage.created_at < cutoff_date
+            ).delete()
+            self.db.commit()
+            if count > 0:
+                logger.info(f"Deleted {count} old ChatMessage records (older than {retention_days} days)")
+            return count
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Failed to delete old ChatMessage records: {e}")
+            raise

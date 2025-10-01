@@ -2,11 +2,14 @@ from datetime import datetime
 from models import SessionLocal, Task, GlobalContext
 from repositories.task_repository import TaskRepository
 from repositories.context_repository import GlobalContextRepository
+from repositories.dspy_execution_repository import DSPyExecutionRepository
+from repositories.chat_repository import ChatRepository
 import logging
 import dspy
 from scheduler import TimeSlotModule, ScheduledTask, PrioritizerModule, TaskInput
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from sqlalchemy.exc import InvalidRequestError
+from config import settings
 import os
 
 logger = logging.getLogger(__name__)
@@ -227,5 +230,30 @@ class ScheduleChecker:
             logger.info("🔍 Schedule Check COMPLETED")
 
             return tasks_rescheduled + tasks_scheduled
+        finally:
+            db.close()
+
+    def cleanup_old_audit_records(self):
+        """Clean up old audit records (DSPyExecution and ChatMessage) based on retention policy"""
+        logger.info("🧹 Starting audit record cleanup...")
+        db = SessionLocal()
+        try:
+            dspy_repo = DSPyExecutionRepository(db)
+            chat_repo = ChatRepository(db)
+
+            # Delete old DSPy execution records
+            dspy_deleted = dspy_repo.delete_old_records(settings.audit_retention_days)
+
+            # Delete old chat messages
+            chat_deleted = chat_repo.delete_old_records(settings.audit_retention_days)
+
+            total_deleted = dspy_deleted + chat_deleted
+            if total_deleted > 0:
+                logger.info(f"🧹 Cleanup complete: Deleted {dspy_deleted} DSPyExecution + {chat_deleted} ChatMessage records (retention: {settings.audit_retention_days} days)")
+            else:
+                logger.info(f"✅ No old audit records to clean up (retention: {settings.audit_retention_days} days)")
+
+        except Exception as e:
+            logger.error(f"❌ Audit cleanup failed: {e}")
         finally:
             db.close()

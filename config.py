@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     fallback_start_hour: int = 9
     fallback_duration_hours: int = 1
 
+    # Audit Table Archival
+    audit_retention_days: int = 30
+
     @field_validator('openrouter_api_key')
     @classmethod
     def validate_api_key(cls, v):
@@ -78,6 +81,15 @@ class Settings(BaseSettings):
         if v.lower() not in valid_formats:
             raise ValueError(f'log_format must be one of {valid_formats}')
         return v.lower()
+
+    @field_validator('audit_retention_days')
+    @classmethod
+    def validate_audit_retention_days(cls, v):
+        if v < 1:
+            raise ValueError('audit_retention_days must be at least 1')
+        if v > 3650:
+            raise ValueError('audit_retention_days must not exceed 3650 (10 years)')
+        return v
 
     model_config = ConfigDict(
         env_file=".env",

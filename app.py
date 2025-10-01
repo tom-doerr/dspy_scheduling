@@ -48,8 +48,9 @@ async def lifespan(app: FastAPI):
     if settings.scheduler_enabled:
         bg_scheduler = BackgroundScheduler()
         bg_scheduler.add_job(schedule_checker_instance.check_and_update_schedule, 'interval', seconds=settings.scheduler_interval_seconds)
+        bg_scheduler.add_job(schedule_checker_instance.cleanup_old_audit_records, 'cron', hour=3, minute=0)
         bg_scheduler.start()
-        logger.info(f"Background scheduler started (interval: {settings.scheduler_interval_seconds}s)")
+        logger.info(f"Background scheduler started (interval: {settings.scheduler_interval_seconds}s, daily cleanup at 3:00 AM)")
     else:
         logger.info("Background scheduler disabled")
 
