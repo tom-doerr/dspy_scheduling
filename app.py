@@ -12,11 +12,12 @@ from datetime import datetime
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import text
+from logging_config import setup_logging, get_logger
 
 from routers import task_router, context_router, inference_router, settings_router, chat_router
 
-logging.basicConfig(level=getattr(logging, settings.log_level))
-logger = logging.getLogger(__name__)
+setup_logging(log_level=settings.log_level, log_format=settings.log_format)
+logger = get_logger(__name__)
 
 templates = Jinja2Templates(directory="templates")
 

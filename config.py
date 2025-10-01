@@ -26,6 +26,7 @@ class Settings(BaseSettings):
 
     # Logging
     log_level: str = "INFO"
+    log_format: str = "standard"  # "json" or "standard"
 
     # Fallback Scheduling (when DSPy fails)
     fallback_start_hour: int = 9
@@ -69,6 +70,14 @@ class Settings(BaseSettings):
         if v <= 0:
             raise ValueError('fallback_duration_hours must be positive')
         return v
+
+    @field_validator('log_format')
+    @classmethod
+    def validate_log_format(cls, v):
+        valid_formats = ['json', 'standard']
+        if v.lower() not in valid_formats:
+            raise ValueError(f'log_format must be one of {valid_formats}')
+        return v.lower()
 
     model_config = ConfigDict(
         env_file=".env",
