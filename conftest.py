@@ -13,17 +13,8 @@ BASE_URL = "http://localhost:5000"
 HEADLESS = True
 
 
-# Unit test fixtures (existing)
-@pytest.fixture
-def client():
-    """Fixture for FastAPI test client (unit tests)."""
-    from fastapi.testclient import TestClient
-    from app import app
-    from models import init_db
-
-    init_db()
-    with TestClient(app) as test_client:
-        yield test_client
+# Note: Unit test fixtures are now in test_app.py to avoid conflicts
+# The client fixture in test_app.py uses proper database isolation
 
 
 # Playwright fixtures for e2e tests

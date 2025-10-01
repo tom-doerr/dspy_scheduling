@@ -9,9 +9,9 @@ class Task(Base):
     __tablename__ = 'tasks'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    title = Column(String, nullable=False)
-    description = Column(String, default='')
-    context = Column(String, default='')
+    title = Column(String(200), nullable=False)
+    description = Column(String(1000), default='')
+    context = Column(String(1000), default='')
     due_date = Column(DateTime, nullable=True)
     scheduled_start_time = Column(DateTime, nullable=True)
     scheduled_end_time = Column(DateTime, nullable=True)
@@ -32,7 +32,7 @@ class DSPyExecution(Base):
     __tablename__ = 'dspy_executions'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    module_name = Column(String, nullable=False)
+    module_name = Column(String(100), nullable=False)
     inputs = Column(Text, nullable=False)
     outputs = Column(Text, nullable=False)
     duration_ms = Column(Float, nullable=False)

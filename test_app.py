@@ -2,36 +2,69 @@ import pytest
 from fastapi.testclient import TestClient
 from datetime import datetime
 from app import app
-from models import Base, engine, SessionLocal, Task, GlobalContext, DSPyExecution
+from models import Base, Task, GlobalContext, DSPyExecution, SessionLocal
 from scheduler import ScheduledTask
 import os
+import tempfile
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
-# Set test database
-os.environ['DATABASE_URL'] = 'sqlite:///test_tasks.db'
+# Global test engine and session maker
+test_engine = None
+TestSessionLocal = None
 
 @pytest.fixture(scope="function")
 def client():
-    """Create a test client and reset database"""
-    # Create tables
-    Base.metadata.create_all(engine)
+    """Create a test client with isolated database"""
+    global test_engine, TestSessionLocal
 
-    # Clear all data
-    db = SessionLocal()
-    db.query(Task).delete()
-    db.query(GlobalContext).delete()
-    db.query(DSPyExecution).delete()
-    db.commit()
-    db.close()
+    # Create unique temporary database for this test
+    temp_db = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
+    temp_db_path = temp_db.name
+    temp_db.close()
+
+    # Set test database URL
+    test_db_url = f'sqlite:///{temp_db_path}'
+    os.environ['DATABASE_URL'] = test_db_url
+
+    # Create engine and session for this test
+    test_engine = create_engine(test_db_url, connect_args={"check_same_thread": False})
+    TestSessionLocal = sessionmaker(bind=test_engine, autocommit=False, autoflush=False)
+
+    # Create tables
+    Base.metadata.create_all(test_engine)
+
+    # Override get_db dependency to use test database
+    def override_get_db():
+        db = TestSessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    from models import get_db
+    app.dependency_overrides[get_db] = override_get_db
 
     yield TestClient(app)
 
-    # Cleanup
-    db = SessionLocal()
-    db.query(Task).delete()
-    db.query(GlobalContext).delete()
-    db.query(DSPyExecution).delete()
-    db.commit()
-    db.close()
+    # Clear overrides
+    app.dependency_overrides.clear()
+
+    # Cleanup: close engine and delete temp database
+    test_engine.dispose()
+    try:
+        os.unlink(temp_db_path)
+    except Exception:
+        pass  # Best effort cleanup
+
+@pytest.fixture(scope="function")
+def db_session(client):
+    """Provide database session for tests that need direct DB access"""
+    db = TestSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 def test_index_page(client):
     """Test main page loads"""
@@ -49,137 +82,118 @@ def test_get_tasks_empty(client):
     response = client.get("/tasks")
     assert response.status_code == 200
 
-def test_start_task(client):
+def test_start_task(client, db_session):
     """Test starting a task sets actual_start_time"""
-    db = SessionLocal()
     task = Task(title="Test Task", description="Test")
-    db.add(task)
-    db.commit()
-    db.refresh(task)
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
     task_id = task.id
-    db.close()
 
     response = client.post(f"/tasks/{task_id}/start")
     assert response.status_code == 200
 
-    db = SessionLocal()
-    task = db.query(Task).filter(Task.id == task_id).first()
+    db_session.expire_all()
+    task = db_session.query(Task).filter(Task.id == task_id).first()
     assert task.actual_start_time is not None
-    db.close()
 
-def test_complete_task(client):
+def test_complete_task(client, db_session):
     """Test completing a task"""
-    db = SessionLocal()
-    task = Task(title="Test Task")
-    db.add(task)
-    db.commit()
-    db.refresh(task)
+    task = Task(title="Test Task", actual_start_time=datetime.now())
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
     task_id = task.id
-    db.close()
 
     response = client.post(f"/tasks/{task_id}/complete")
     assert response.status_code == 200
 
-    db = SessionLocal()
-    task = db.query(Task).filter(Task.id == task_id).first()
+    db_session.expire_all()
+    task = db_session.query(Task).filter(Task.id == task_id).first()
     assert task.completed == True
     assert task.actual_end_time is not None
-    db.close()
 
-def test_delete_task(client):
+def test_delete_task(client, db_session):
     """Test deleting a task"""
-    db = SessionLocal()
     task = Task(title="Test Task")
-    db.add(task)
-    db.commit()
+    db_session.add(task)
+    db_session.commit()
     task_id = task.id
-    db.close()
 
     response = client.delete(f"/tasks/{task_id}")
     assert response.status_code == 200
 
-    db = SessionLocal()
-    task = db.query(Task).filter(Task.id == task_id).first()
+    db_session.expire_all()
+    task = db_session.query(Task).filter(Task.id == task_id).first()
     assert task is None
-    db.close()
 
-def test_global_context_create(client):
+def test_global_context_create(client, db_session):
     """Test creating global context"""
     response = client.post("/global-context", data={"context": "I prefer mornings"})
     assert response.status_code == 200
 
-    db = SessionLocal()
-    context = db.query(GlobalContext).first()
+    db_session.expire_all()
+    context = db_session.query(GlobalContext).first()
     assert context is not None
     assert context.context == "I prefer mornings"
-    db.close()
 
-def test_get_inference_log(client):
+def test_get_inference_log(client, db_session):
     """Test getting inference log"""
-    db = SessionLocal()
     execution = DSPyExecution(
         module_name="TestModule",
         inputs='{"test": "input"}',
         outputs='{"test": "output"}',
         duration_ms=100.5
     )
-    db.add(execution)
-    db.commit()
-    db.close()
+    db_session.add(execution)
+    db_session.commit()
 
     response = client.get("/inference-log")
     assert response.status_code == 200
     assert b"TestModule" in response.content
 
-def test_active_task(client):
+def test_active_task(client, db_session):
     """Test active task shows started task"""
-    db = SessionLocal()
     task = Task(
         title="Active Task",
         actual_start_time=datetime.now(),
         completed=False
     )
-    db.add(task)
-    db.commit()
-    db.close()
+    db_session.add(task)
+    db_session.commit()
 
     response = client.get("/active-task")
     assert response.status_code == 200
     assert b"Active Task" in response.content
 
-def test_timezone_consistency_task_creation(client):
+def test_timezone_consistency_task_creation(client, db_session):
     """Test that task created_at uses local time not UTC"""
-    db = SessionLocal()
     before = datetime.now()
     task = Task(title="Timezone Test")
-    db.add(task)
-    db.commit()
-    db.refresh(task)
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
     after = datetime.now()
 
     assert task.created_at >= before
     assert task.created_at <= after
     assert task.created_at.tzinfo is None
-    db.close()
 
-def test_timezone_consistency_global_context(client):
+def test_timezone_consistency_global_context(client, db_session):
     """Test that global context updated_at uses local time"""
-    db = SessionLocal()
     before = datetime.now()
     context = GlobalContext(context="Test")
-    db.add(context)
-    db.commit()
-    db.refresh(context)
+    db_session.add(context)
+    db_session.commit()
+    db_session.refresh(context)
     after = datetime.now()
 
     assert context.updated_at >= before
     assert context.updated_at <= after
     assert context.updated_at.tzinfo is None
-    db.close()
 
-def test_timezone_consistency_dspy_execution(client):
+def test_timezone_consistency_dspy_execution(client, db_session):
     """Test that DSPy execution created_at uses local time"""
-    db = SessionLocal()
     before = datetime.now()
     execution = DSPyExecution(
         module_name="Test",
@@ -187,35 +201,32 @@ def test_timezone_consistency_dspy_execution(client):
         outputs="{}",
         duration_ms=100.0
     )
-    db.add(execution)
-    db.commit()
-    db.refresh(execution)
+    db_session.add(execution)
+    db_session.commit()
+    db_session.refresh(execution)
     after = datetime.now()
 
     assert execution.created_at >= before
     assert execution.created_at <= after
     assert execution.created_at.tzinfo is None
-    db.close()
 
-def test_task_id_autoincrement(client):
+def test_task_id_autoincrement(client, db_session):
     """Test that task IDs auto-increment correctly"""
-    db = SessionLocal()
-
     task1 = Task(title="Task 1")
     task2 = Task(title="Task 2")
     task3 = Task(title="Task 3")
 
-    db.add(task1)
-    db.commit()
-    db.refresh(task1)
+    db_session.add(task1)
+    db_session.commit()
+    db_session.refresh(task1)
 
-    db.add(task2)
-    db.commit()
-    db.refresh(task2)
+    db_session.add(task2)
+    db_session.commit()
+    db_session.refresh(task2)
 
-    db.add(task3)
-    db.commit()
-    db.refresh(task3)
+    db_session.add(task3)
+    db_session.commit()
+    db_session.refresh(task3)
 
     assert task1.id is not None
     assert task2.id is not None
@@ -223,49 +234,39 @@ def test_task_id_autoincrement(client):
     assert task2.id > task1.id
     assert task3.id > task2.id
 
-    db.close()
-
-def test_global_context_id_autoincrement(client):
+def test_global_context_id_autoincrement(client, db_session):
     """Test that GlobalContext IDs auto-increment correctly"""
-    db = SessionLocal()
-
     context1 = GlobalContext(context="Context 1")
     context2 = GlobalContext(context="Context 2")
 
-    db.add(context1)
-    db.commit()
-    db.refresh(context1)
+    db_session.add(context1)
+    db_session.commit()
+    db_session.refresh(context1)
 
-    db.add(context2)
-    db.commit()
-    db.refresh(context2)
+    db_session.add(context2)
+    db_session.commit()
+    db_session.refresh(context2)
 
     assert context1.id is not None
     assert context2.id is not None
     assert context2.id > context1.id
 
-    db.close()
-
-def test_dspy_execution_id_autoincrement(client):
+def test_dspy_execution_id_autoincrement(client, db_session):
     """Test that DSPyExecution IDs auto-increment correctly"""
-    db = SessionLocal()
-
     exec1 = DSPyExecution(module_name="Module1", inputs="{}", outputs="{}", duration_ms=10.0)
     exec2 = DSPyExecution(module_name="Module2", inputs="{}", outputs="{}", duration_ms=20.0)
 
-    db.add(exec1)
-    db.commit()
-    db.refresh(exec1)
+    db_session.add(exec1)
+    db_session.commit()
+    db_session.refresh(exec1)
 
-    db.add(exec2)
-    db.commit()
-    db.refresh(exec2)
+    db_session.add(exec2)
+    db_session.commit()
+    db_session.refresh(exec2)
 
     assert exec1.id is not None
     assert exec2.id is not None
     assert exec2.id > exec1.id
-
-    db.close()
 
 def test_scheduled_task_has_id_field():
     """Test that ScheduledTask model includes id field"""
@@ -298,18 +299,16 @@ def test_scheduled_task_serialization():
     assert task_dict["start_time"] == "2025-10-01T14:00:00"
     assert task_dict["end_time"] == "2025-10-01T15:00:00"
 
-def test_task_to_scheduled_task_includes_id(client):
+def test_task_to_scheduled_task_includes_id(client, db_session):
     """Test that converting Task to ScheduledTask includes the id"""
-    db = SessionLocal()
-
     task = Task(
         title="Task with ID",
         scheduled_start_time=datetime(2025, 10, 1, 10, 0, 0),
         scheduled_end_time=datetime(2025, 10, 1, 11, 0, 0)
     )
-    db.add(task)
-    db.commit()
-    db.refresh(task)
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
 
     scheduled_task = ScheduledTask(
         id=task.id,
@@ -321,12 +320,8 @@ def test_task_to_scheduled_task_includes_id(client):
     assert scheduled_task.id == task.id
     assert scheduled_task.title == task.title
 
-    db.close()
-
-def test_existing_schedule_excludes_current_task(client):
+def test_existing_schedule_excludes_current_task(client, db_session):
     """Test that when building existing_schedule, current task is excluded"""
-    db = SessionLocal()
-
     task1 = Task(
         title="Task 1",
         scheduled_start_time=datetime(2025, 10, 1, 10, 0, 0),
@@ -343,14 +338,14 @@ def test_existing_schedule_excludes_current_task(client):
         scheduled_end_time=datetime(2025, 10, 1, 15, 0, 0)
     )
 
-    db.add_all([task1, task2, task3])
-    db.commit()
-    db.refresh(task1)
-    db.refresh(task2)
-    db.refresh(task3)
+    db_session.add_all([task1, task2, task3])
+    db_session.commit()
+    db_session.refresh(task1)
+    db_session.refresh(task2)
+    db_session.refresh(task3)
 
     # Simulate building existing_schedule excluding task2
-    existing_tasks = db.query(Task).filter(
+    existing_tasks = db_session.query(Task).filter(
         Task.scheduled_start_time.isnot(None),
         Task.completed == False,
         Task.id != task2.id
@@ -370,32 +365,24 @@ def test_existing_schedule_excludes_current_task(client):
     assert any(s.id == task1.id for s in existing_schedule)
     assert any(s.id == task3.id for s in existing_schedule)
 
-    db.close()
-
-def test_id_uniqueness_across_models(client):
+def test_id_uniqueness_across_models(client, db_session):
     """Test that IDs are unique and independent across different models"""
-    db = SessionLocal()
-
     task = Task(title="Task")
     context = GlobalContext(context="Context")
     execution = DSPyExecution(module_name="Module", inputs="{}", outputs="{}", duration_ms=10.0)
 
-    db.add_all([task, context, execution])
-    db.commit()
-    db.refresh(task)
-    db.refresh(context)
-    db.refresh(execution)
+    db_session.add_all([task, context, execution])
+    db_session.commit()
+    db_session.refresh(task)
+    db_session.refresh(context)
+    db_session.refresh(execution)
 
     assert task.id is not None
     assert context.id is not None
     assert execution.id is not None
 
-    db.close()
-
-def test_end_to_end_id_flow(client):
+def test_end_to_end_id_flow(client, db_session):
     """Test that task IDs flow correctly from DB to ScheduledTask to dict"""
-    db = SessionLocal()
-
     # Create tasks in database
     task1 = Task(
         title="Morning Task",
@@ -408,17 +395,16 @@ def test_end_to_end_id_flow(client):
         scheduled_end_time=datetime(2025, 10, 1, 15, 0, 0)
     )
 
-    db.add_all([task1, task2])
-    db.commit()
-    db.refresh(task1)
-    db.refresh(task2)
+    db_session.add_all([task1, task2])
+    db_session.commit()
+    db_session.refresh(task1)
+    db_session.refresh(task2)
 
     db_task1_id = task1.id
     db_task2_id = task2.id
 
     # Query tasks back from database
-    db = SessionLocal()
-    tasks = db.query(Task).filter(Task.scheduled_start_time.isnot(None)).all()
+    tasks = db_session.query(Task).filter(Task.scheduled_start_time.isnot(None)).all()
 
     # Convert to ScheduledTask objects (mimicking app.py behavior)
     existing_schedule = [
@@ -441,12 +427,8 @@ def test_end_to_end_id_flow(client):
     assert any(d["id"] == db_task1_id for d in schedule_dicts)
     assert any(d["id"] == db_task2_id for d in schedule_dicts)
 
-    db.close()
-
-def test_tasks_displayed_in_html(client):
+def test_tasks_displayed_in_html(client, db_session):
     """Test that tasks are properly displayed in the HTML response"""
-    db = SessionLocal()
-
     task1 = Task(
         title="Morning Meeting",
         description="Team standup",
@@ -460,9 +442,8 @@ def test_tasks_displayed_in_html(client):
         scheduled_end_time=datetime(2025, 10, 1, 16, 0, 0)
     )
 
-    db.add_all([task1, task2])
-    db.commit()
-    db.close()
+    db_session.add_all([task1, task2])
+    db_session.commit()
 
     response = client.get("/tasks")
     assert response.status_code == 200
@@ -471,10 +452,8 @@ def test_tasks_displayed_in_html(client):
     assert b"Team standup" in response.content
     assert b"Code review" in response.content
 
-def test_task_item_html_structure(client):
+def test_task_item_html_structure(client, db_session):
     """Test that individual task HTML contains expected elements"""
-    db = SessionLocal()
-
     task = Task(
         title="Test Task Structure",
         description="Description text",
@@ -483,11 +462,10 @@ def test_task_item_html_structure(client):
         scheduled_end_time=datetime(2025, 10, 1, 11, 0, 0)
     )
 
-    db.add(task)
-    db.commit()
-    db.refresh(task)
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
     task_id = task.id
-    db.close()
 
     response = client.get("/tasks")
     html = response.content.decode('utf-8')
@@ -500,19 +478,16 @@ def test_task_item_html_structure(client):
     assert "2025-10-01 10:00" in html
     assert "2025-10-01 11:00" in html
 
-def test_completed_task_styling(client):
+def test_completed_task_styling(client, db_session):
     """Test that completed tasks have the completed class"""
-    db = SessionLocal()
-
     task = Task(
         title="Completed Task",
         completed=True,
         actual_end_time=datetime.now()
     )
 
-    db.add(task)
-    db.commit()
-    db.close()
+    db_session.add(task)
+    db_session.commit()
 
     response = client.get("/tasks")
     html = response.content.decode('utf-8')
@@ -520,3 +495,73 @@ def test_completed_task_styling(client):
     assert 'class="task' in html
     assert 'completed' in html
     assert "Completed Task" in html
+
+# Validation and error handling tests
+
+def test_create_task_with_title_too_long(client):
+    """Test that creating a task with title > 200 chars fails"""
+    response = client.post("/tasks", data={
+        "title": "x" * 201,
+        "description": "Valid description"
+    })
+    assert response.status_code == 422
+
+def test_create_task_with_description_too_long(client):
+    """Test that creating a task with description > 1000 chars fails"""
+    response = client.post("/tasks", data={
+        "title": "Valid title",
+        "description": "x" * 1001
+    })
+    assert response.status_code == 422
+
+def test_start_completed_task(client, db_session):
+    """Test that starting a completed task returns 400"""
+    task = Task(title="Completed", completed=True, actual_start_time=datetime.now(), actual_end_time=datetime.now())
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
+
+    response = client.post(f"/tasks/{task.id}/start")
+    assert response.status_code == 400
+
+def test_complete_not_started_task(client, db_session):
+    """Test that completing a task that hasn't been started returns 400"""
+    task = Task(title="Not Started")
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
+
+    response = client.post(f"/tasks/{task.id}/complete")
+    assert response.status_code == 400
+    assert b"not been started" in response.content.lower()
+
+def test_start_nonexistent_task(client):
+    """Test that starting a nonexistent task returns 404"""
+    response = client.post("/tasks/99999/start")
+    assert response.status_code == 404
+
+def test_invalid_task_id_rejected(client):
+    """Test that invalid task IDs (<=0) are rejected"""
+    response = client.post("/tasks/0/start")
+    assert response.status_code == 422
+
+    response = client.post("/tasks/-1/start")
+    assert response.status_code == 422
+
+def test_global_context_too_long(client):
+    """Test that global context > 5000 chars fails"""
+    response = client.post("/global-context", data={
+        "context": "x" * 5001
+    })
+    assert response.status_code == 422
+
+def test_multiple_active_tasks_prevented(client, db_session):
+    """Test that starting a second task while one is active fails"""
+    task1 = Task(title="Active Task 1", actual_start_time=datetime.now())
+    task2 = Task(title="Task 2")
+    db_session.add_all([task1, task2])
+    db_session.commit()
+    db_session.refresh(task2)
+
+    response = client.post(f"/tasks/{task2.id}/start")
+    assert response.status_code == 400

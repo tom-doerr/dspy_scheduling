@@ -45,7 +45,16 @@ class TaskRepository:
     def start_task(self, task: Task) -> Task:
         """Mark task as started"""
         self.db.refresh(task)
+
+        # Validate task state
+        if task.completed:
+            raise ValueError(f"Cannot start task: Task '{task.title}' is already completed")
+
         if not task.actual_start_time:
+            # Check if another task is already active
+            active_task = self.get_active()
+            if active_task and active_task.id != task.id:
+                raise ValueError(f"Cannot start task: Another task '{active_task.title}' is already active")
             task.actual_start_time = datetime.now()
             self.db.commit()
         return task
@@ -53,6 +62,11 @@ class TaskRepository:
     def complete_task(self, task: Task) -> Task:
         """Mark task as completed"""
         self.db.refresh(task)
+
+        # Validate task state
+        if not task.actual_start_time:
+            raise ValueError(f"Cannot complete task: Task '{task.title}' has not been started")
+
         task.completed = True
         task.actual_end_time = datetime.now()
         self.db.commit()

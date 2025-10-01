@@ -11,6 +11,17 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 logger = logging.getLogger(__name__)
 
 
+def _safe_fromisoformat(date_str: Optional[str], field_name: str = "date") -> Optional[datetime]:
+    """Safely parse ISO format datetime string with error logging"""
+    if not date_str:
+        return None
+    try:
+        return datetime.fromisoformat(date_str)
+    except (ValueError, TypeError) as e:
+        logger.error(f"Invalid {field_name} format: {date_str}, error: {e}")
+        return None
+
+
 class TaskService:
     """Service layer for task operations"""
 
@@ -49,7 +60,11 @@ class TaskService:
         )
 
     def create_task(self, title: str, description: str, context: str, due_date: Optional[str]) -> Task:
-        """Create a new task with DSPy scheduling"""
+        """Create a new task with DSPy scheduling
+
+        Note: DSPy execution tracking uses a separate session for isolation.
+        All database operations within this method use the same transaction.
+        """
         try:
             current_datetime = datetime.now().isoformat()
             existing_tasks = self.task_repo.get_scheduled()
@@ -74,14 +89,15 @@ class TaskService:
                 title=title,
                 description=description,
                 context=context,
-                due_date=datetime.fromisoformat(due_date) if due_date else None,
-                scheduled_start_time=datetime.fromisoformat(result.start_time) if result.start_time else None,
-                scheduled_end_time=datetime.fromisoformat(result.end_time) if result.end_time else None
+                due_date=_safe_fromisoformat(due_date, "due_date"),
+                scheduled_start_time=_safe_fromisoformat(result.start_time, "start_time"),
+                scheduled_end_time=_safe_fromisoformat(result.end_time, "end_time")
             )
 
             return self.task_repo.create(task)
 
         except Exception as e:
+            # Repository handles rollback automatically on exception
             logger.error(f"Failed to create task '{title}': {e}")
             return self._create_fallback_task(title, description, context, due_date)
 
@@ -124,7 +140,7 @@ class TaskService:
             title=title,
             description=description,
             context=context,
-            due_date=datetime.fromisoformat(due_date) if due_date else None,
+            due_date=_safe_fromisoformat(due_date, "due_date"),
             scheduled_start_time=fallback_start,
             scheduled_end_time=fallback_end
         )

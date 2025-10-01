@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Form, Depends, HTTPException
+from fastapi import APIRouter, Request, Form, Depends, HTTPException, Path
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from models import get_db
@@ -61,18 +61,28 @@ async def add_task(
 
 
 @router.post('/tasks/{task_id}/start', response_class=HTMLResponse)
-async def start_task(request: Request, task_id: int, service: TaskService = Depends(get_task_service)):
-    task = service.start_task(task_id)
-    return templates.TemplateResponse('task_item.html', {'request': request, 'task': task})
+async def start_task(request: Request, task_id: int = Path(..., gt=0), service: TaskService = Depends(get_task_service)):
+    try:
+        task = service.start_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return templates.TemplateResponse('task_item.html', {'request': request, 'task': task})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post('/tasks/{task_id}/complete', response_class=HTMLResponse)
-async def complete_task(request: Request, task_id: int, service: TaskService = Depends(get_task_service)):
-    task = service.complete_task(task_id)
-    return templates.TemplateResponse('task_item.html', {'request': request, 'task': task})
+async def complete_task(request: Request, task_id: int = Path(..., gt=0), service: TaskService = Depends(get_task_service)):
+    try:
+        task = service.complete_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return templates.TemplateResponse('task_item.html', {'request': request, 'task': task})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.delete('/tasks/{task_id}')
-async def delete_task(task_id: int, service: TaskService = Depends(get_task_service)):
+async def delete_task(task_id: int = Path(..., gt=0), service: TaskService = Depends(get_task_service)):
     service.delete_task(task_id)
     return ''

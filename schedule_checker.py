@@ -67,8 +67,20 @@ class ScheduleChecker:
 
         # Refresh task and update with new times
         task_repo.db.refresh(task)
-        task.scheduled_start_time = datetime.fromisoformat(result.start_time)
-        task.scheduled_end_time = datetime.fromisoformat(result.end_time)
+
+        # Safely parse datetime strings with fallback
+        try:
+            task.scheduled_start_time = datetime.fromisoformat(result.start_time) if result.start_time else None
+        except (ValueError, TypeError) as e:
+            logger.error(f"Invalid start_time format from DSPy: {result.start_time}, error: {e}")
+            task.scheduled_start_time = None
+
+        try:
+            task.scheduled_end_time = datetime.fromisoformat(result.end_time) if result.end_time else None
+        except (ValueError, TypeError) as e:
+            logger.error(f"Invalid end_time format from DSPy: {result.end_time}, error: {e}")
+            task.scheduled_end_time = None
+
         task_repo.db.commit()
 
         logger.info(f"✅ Rescheduled '{task.title}': {result.start_time} → {result.end_time}")

@@ -1,6 +1,10 @@
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from models import GlobalContext
 from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class GlobalContextRepository:
@@ -14,12 +18,18 @@ class GlobalContextRepository:
         return self.db.query(GlobalContext).first()
 
     def get_or_create(self) -> GlobalContext:
-        """Get or create global context"""
-        context = self.get()
+        """Get or create global context with row locking to prevent race conditions"""
+        # Use FOR UPDATE to lock the row and prevent concurrent creates
+        context = self.db.query(GlobalContext).with_for_update().first()
         if not context:
-            context = GlobalContext(context="")
-            self.db.add(context)
-            self.db.commit()
+            # Check again without lock in case another transaction just created it
+            self.db.commit()  # Release any locks
+            context = self.db.query(GlobalContext).first()
+            if not context:
+                context = GlobalContext(context="")
+                self.db.add(context)
+                self.db.commit()
+                logger.debug("Created new GlobalContext")
         return context
 
     def update(self, context_text: str) -> GlobalContext:
@@ -29,6 +39,8 @@ class GlobalContextRepository:
             context = GlobalContext(context=context_text)
             self.db.add(context)
         else:
+            # Refresh to prevent race conditions
+            self.db.refresh(context)
             context.context = context_text
         self.db.commit()
         return context
