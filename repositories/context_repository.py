@@ -44,16 +44,12 @@ class GlobalContextRepository:
 
     def update(self, context_text: str) -> GlobalContext:
         """Update global context"""
-        context = self.get()
-        if not context:
-            context = GlobalContext(singleton=True, context=context_text)
-            self.db.add(context)
-            logger.info("Created GlobalContext via update")
-        else:
-            # Refresh to prevent race conditions
-            self.db.refresh(context)
-            context.context = context_text
-            context.updated_at = datetime.now()
-            logger.info("Updated GlobalContext")
+        # Use get_or_create to handle race conditions when no context exists
+        context = self.get_or_create()
+        # Refresh to prevent race conditions
+        self.db.refresh(context)
+        context.context = context_text
+        context.updated_at = datetime.now()
+        logger.info("Updated GlobalContext")
         self.db.commit()
         return context
