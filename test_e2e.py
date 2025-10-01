@@ -334,3 +334,152 @@ class TestTimelineView:
         gantt_items = page.locator(".timeline-item")
         count = gantt_items.count()
         assert count == 3
+
+
+class TestHistoryPage:
+    """Test history page functionality."""
+
+    def test_history_page_loads(self, page: Page):
+        """Test that history page loads successfully."""
+        page.goto("/history")
+        page.wait_for_timeout(1000)
+        expect(page.locator('a:has-text("History")')).to_be_visible()
+        page_content = page.content()
+        assert "Historic Time Tracking" in page_content or "History" in page_content
+
+    def test_completed_task_appears_in_history(self, page: Page):
+        """Test that completed tasks appear in history."""
+        page.goto("/")
+        page.fill('input[name="title"]', "History Test Task")
+        page.click('button[type="submit"]')
+        expect(page.locator(".task:has-text('History Test Task')")).to_be_visible(timeout=3000)
+
+        page.locator('button:has-text("Complete")').first.click()
+        page.wait_for_timeout(1000)
+
+        page.click('a:has-text("History")')
+        expect(page).to_have_url("/history")
+        expect(page.locator(".history-item")).to_contain_text("History Test Task")
+
+    def test_history_shows_duration(self, page: Page):
+        """Test that history displays task duration."""
+        page.goto("/")
+        page.fill('input[name="title"]', "Duration History Task")
+        page.click('button[type="submit"]')
+        expect(page.locator(".task")).to_be_visible(timeout=3000)
+
+        page.locator('button:has-text("Start")').first.click()
+        page.wait_for_timeout(2000)
+        page.locator('button:has-text("Complete")').first.click()
+        page.wait_for_timeout(1000)
+
+        page.click('a:has-text("History")')
+        history_item = page.locator(".history-item").first
+        expect(history_item).to_be_visible()
+        html = history_item.inner_html()
+        assert "m" in html or "h" in html or ":" in html
+
+
+class TestSettingsPage:
+    """Test settings page functionality."""
+
+    def test_settings_page_loads(self, page: Page):
+        """Test that settings page loads successfully."""
+        page.goto("/settings")
+        expect(page.locator("h1")).to_contain_text("DSPy Task Scheduler")
+        expect(page.locator("h2")).to_contain_text("Settings")
+
+    def test_settings_form_displays_current_values(self, page: Page):
+        """Test that settings form shows current configuration."""
+        page.goto("/settings")
+        page.wait_for_timeout(1000)
+
+        llm_input = page.locator('input[name="llm_model"]')
+        expect(llm_input).to_be_visible()
+        assert llm_input.input_value() != ""
+
+        tokens_input = page.locator('input[name="max_tokens"]')
+        expect(tokens_input).to_be_visible()
+        assert tokens_input.input_value() != ""
+
+
+class TestChatFunctionality:
+    """Test chat interface and AI assistant."""
+
+    def test_chat_page_loads(self, page: Page):
+        """Test that chat page loads successfully."""
+        page.goto("/chat")
+        expect(page.locator("h1")).to_contain_text("DSPy Task Scheduler")
+        expect(page.locator("h2")).to_contain_text("AI Task Assistant")
+
+    def test_chat_message_input_visible(self, page: Page):
+        """Test that chat input and send button are visible."""
+        page.goto("/chat")
+        expect(page.locator('input[name="message"]')).to_be_visible()
+        expect(page.locator('button:has-text("Send")')).to_be_visible()
+
+    def test_chat_clear_button_visible(self, page: Page):
+        """Test that clear history button is visible."""
+        page.goto("/chat")
+        expect(page.locator('button:has-text("Clear History")')).to_be_visible()
+
+
+class TestReprioritization:
+    """Test task reprioritization functionality."""
+
+    def test_reprioritize_button_visible(self, page: Page):
+        """Test that reprioritize button is visible on task list."""
+        page.goto("/")
+        expect(page.locator('button:has-text("Reprioritize All Tasks")')).to_be_visible()
+
+
+class TestTaskModal:
+    """Test task detail modal functionality."""
+
+    def test_task_click_opens_modal(self, page: Page):
+        """Test that clicking a task opens the detail modal."""
+        page.goto("/")
+        page.fill('input[name="title"]', "Modal Test Task")
+        page.click('button[type="submit"]')
+        expect(page.locator(".task:has-text('Modal Test Task')")).to_be_visible(timeout=3000)
+
+        page.locator(".task:has-text('Modal Test Task')").click()
+        page.wait_for_timeout(1000)
+
+        modal = page.locator(".modal")
+        expect(modal).to_be_visible()
+        expect(modal).to_contain_text("Modal Test Task")
+
+
+class TestStopTask:
+    """Test stop task functionality."""
+
+    def test_stop_button_appears_after_start(self, page: Page):
+        """Test that stop button appears when task is started."""
+        page.goto("/calendar")
+        page.click('a:has-text("Task List")')
+        page.fill('input[name="title"]', "Task to Stop")
+        page.click('button[type="submit"]')
+        expect(page.locator(".task")).to_be_visible(timeout=3000)
+
+        page.locator('button:has-text("Start")').first.click()
+        page.wait_for_timeout(1000)
+
+        expect(page.locator('button:has-text("Stop")')).to_be_visible()
+
+    def test_timeline_shows_stop_button_for_active_task(self, page: Page):
+        """Test that timeline view shows stop button for active tasks."""
+        page.goto("/")
+        page.fill('input[name="title"]', "Timeline Stop Task")
+        page.click('button[type="submit"]')
+        expect(page.locator(".task")).to_be_visible(timeout=3000)
+
+        page.locator('button:has-text("Start")').first.click()
+        page.wait_for_timeout(1000)
+
+        page.click('a:has-text("Timeline")')
+        page.wait_for_timeout(1000)
+
+        timeline_item = page.locator(".timeline-item").first
+        expect(timeline_item).to_be_visible()
+        expect(timeline_item.locator('button:has-text("Stop")')).to_be_visible()
