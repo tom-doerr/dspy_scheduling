@@ -114,7 +114,8 @@ async def get_task_details(request: Request, task_id: int = Path(..., gt=0), db:
 
 @router.delete('/tasks/{task_id}')
 async def delete_task(task_id: int = Path(..., gt=0), service: TaskService = Depends(get_task_service)):
-    service.delete_task(task_id)
+    if not service.delete_task(task_id):
+        raise HTTPException(status_code=404, detail="Task not found")
     return ''
 
 

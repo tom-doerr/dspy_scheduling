@@ -1,4 +1,15 @@
 services:
+  db:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=dspy_user
+      - POSTGRES_PASSWORD=dspy_pass
+      - POSTGRES_DB=dspy_scheduling
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   web:
     build: .
     ports:
@@ -7,5 +18,10 @@ services:
       - .:/app
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - DATABASE_URL=sqlite:///tasks.db
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///tasks.db}
     command: python app.py
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:

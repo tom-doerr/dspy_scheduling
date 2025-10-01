@@ -6,6 +6,7 @@ import logging
 import dspy
 from scheduler import TimeSlotModule, ScheduledTask, PrioritizerModule, TaskInput
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from sqlalchemy.exc import InvalidRequestError
 import os
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,11 @@ class ScheduleChecker:
             return
 
         # Refresh task and update with new times
-        task_repo.db.refresh(task)
+        try:
+            task_repo.db.refresh(task)
+        except InvalidRequestError:
+            logger.warning(f"Task '{task.title}' was deleted by another process, skipping reschedule")
+            return
 
         # Safely parse datetime strings with fallback
         try:
@@ -82,9 +87,12 @@ class ScheduleChecker:
             logger.error(f"Invalid end_time format from DSPy: {result.end_time}, error: {e}")
             task.scheduled_end_time = None
 
-        task_repo.db.commit()
-
-        logger.info(f"✅ Rescheduled '{task.title}': {result.start_time} → {result.end_time}")
+        try:
+            task_repo.db.commit()
+            logger.info(f"✅ Rescheduled '{task.title}': {result.start_time} → {result.end_time}")
+        except Exception as e:
+            task_repo.db.rollback()
+            logger.error(f"Failed to commit rescheduled task '{task.title}': {e}")
 
     @retry(
         stop=stop_after_attempt(3),
@@ -134,16 +142,32 @@ class ScheduleChecker:
             logger.error(f"Failed to prioritize tasks after retries: {e}")
             return 0
 
-        # Update priorities
+        # Update priorities (batch all updates, commit once at end)
         tasks_updated = 0
+        updated_tasks = []
+
         for prioritized_task in result.prioritized_tasks:
             task = task_repo.get_by_id(prioritized_task.id)
             if task:
-                task_repo.db.refresh(task)
+                try:
+                    task_repo.db.refresh(task)
+                except InvalidRequestError:
+                    logger.warning(f"Task ID={prioritized_task.id} was deleted by another process, skipping priority update")
+                    continue
                 task.priority = prioritized_task.priority
-                task_repo.db.commit()
-                logger.info(f"✅ Updated priority for '{task.title}': {prioritized_task.priority} ({prioritized_task.reasoning})")
+                updated_tasks.append((task, prioritized_task.reasoning))
                 tasks_updated += 1
+
+        # Commit all updates at once
+        if updated_tasks:
+            try:
+                task_repo.db.commit()
+                for task, reasoning in updated_tasks:
+                    logger.info(f"✅ Updated priority for '{task.title}': {task.priority} ({reasoning})")
+            except Exception as e:
+                task_repo.db.rollback()
+                logger.error(f"Failed to commit priority updates: {e}")
+                return 0
 
         return tasks_updated
 

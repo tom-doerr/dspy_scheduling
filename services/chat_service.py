@@ -63,32 +63,36 @@ class ChatService:
 
         elif action == "start_task" and task_id:
             task = self.task_repo.get_by_id(task_id)
-            if task:
-                self.task_repo.start_task(task)
-                return {"success": True, "message": f"Task '{task.title}' started"}
-            return {"success": False, "message": "Task not found"}
+            if task is None:
+                logger.warning(f"Cannot start task: Task ID={task_id} not found")
+                return {"success": False, "message": "Task not found"}
+            self.task_repo.start_task(task)
+            return {"success": True, "message": f"Task '{task.title}' started"}
 
         elif action == "complete_task" and task_id:
             task = self.task_repo.get_by_id(task_id)
-            if task:
-                self.task_repo.complete_task(task)
-                return {"success": True, "message": f"Task '{task.title}' completed"}
-            return {"success": False, "message": "Task not found"}
+            if task is None:
+                logger.warning(f"Cannot complete task: Task ID={task_id} not found")
+                return {"success": False, "message": "Task not found"}
+            self.task_repo.complete_task(task)
+            return {"success": True, "message": f"Task '{task.title}' completed"}
 
         elif action == "stop_task" and task_id:
             task = self.task_repo.get_by_id(task_id)
-            if task:
-                self.task_repo.stop_task(task)
-                return {"success": True, "message": f"Task '{task.title}' stopped"}
-            return {"success": False, "message": "Task not found"}
+            if task is None:
+                logger.warning(f"Cannot stop task: Task ID={task_id} not found")
+                return {"success": False, "message": "Task not found"}
+            self.task_repo.stop_task(task)
+            return {"success": True, "message": f"Task '{task.title}' stopped"}
 
         elif action == "delete_task" and task_id:
             task = self.task_repo.get_by_id(task_id)
-            if task:
-                title_backup = task.title
-                self.task_repo.delete(task)
-                return {"success": True, "message": f"Task '{title_backup}' deleted"}
-            return {"success": False, "message": "Task not found"}
+            if task is None:
+                logger.warning(f"Cannot delete task: Task ID={task_id} not found")
+                return {"success": False, "message": "Task not found"}
+            title_backup = task.title
+            self.task_repo.delete(task)
+            return {"success": True, "message": f"Task '{title_backup}' deleted"}
 
         return {"success": True, "message": "Action executed"}
 

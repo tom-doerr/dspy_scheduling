@@ -120,12 +120,16 @@ class TaskService:
             task.scheduled_end_time = _safe_fromisoformat(result.end_time, "end_time")
             task.needs_scheduling = False
 
+            self.task_repo.db.commit()
+            logger.info(f"✅ Committed DSPy schedule for task '{task.title}'")
+
             return task
 
         except Exception as e:
             logger.error(f"Failed to schedule task '{task.title}': {e}")
             # Keep fallback times, just mark as no longer needing scheduling
             task.needs_scheduling = False
+            self.task_repo.db.commit()
             return task
 
     def start_task(self, task_id: int) -> Optional[Task]:

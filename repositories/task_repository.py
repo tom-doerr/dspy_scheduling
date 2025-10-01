@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from models import Task
 from typing import List, Optional
 from datetime import datetime
@@ -23,7 +24,7 @@ class TaskRepository:
 
     def get_incomplete(self) -> List[Task]:
         """Get all incomplete tasks"""
-        return self.db.query(Task).filter(Task.completed == False).all()
+        return self.db.query(Task).filter(Task.completed.is_(False)).all()
 
     def get_scheduled(self) -> List[Task]:
         """Get all tasks with scheduled times"""
@@ -31,15 +32,15 @@ class TaskRepository:
 
     def get_tasks_needing_scheduling(self) -> List[Task]:
         """Get all tasks that need DSPy scheduling"""
-        return self.db.query(Task).filter(Task.needs_scheduling == True, Task.completed == False).all()
+        return self.db.query(Task).filter(Task.needs_scheduling.is_(True), Task.completed.is_(False)).all()
 
     def get_active(self) -> Optional[Task]:
         """Get currently active task"""
-        return self.db.query(Task).filter(Task.actual_start_time.isnot(None), Task.completed == False).first()
+        return self.db.query(Task).filter(Task.actual_start_time.isnot(None), Task.completed.is_(False)).first()
 
     def get_completed(self) -> List[Task]:
         """Get all completed tasks ordered by actual end time (most recent first)"""
-        return self.db.query(Task).filter(Task.completed == True).order_by(Task.actual_end_time.desc()).all()
+        return self.db.query(Task).filter(Task.completed.is_(True)).order_by(Task.actual_end_time.desc()).all()
 
     def create(self, task: Task) -> Task:
         """Create a new task"""
@@ -58,7 +59,10 @@ class TaskRepository:
 
     def start_task(self, task: Task) -> Task:
         """Mark task as started"""
-        self.db.refresh(task)
+        try:
+            self.db.refresh(task)
+        except InvalidRequestError:
+            raise ValueError(f"Cannot start task: Task was deleted by another process")
 
         # Validate task state
         if task.completed:
@@ -69,14 +73,28 @@ class TaskRepository:
             active_task = self.get_active()
             if active_task and active_task.id != task.id:
                 raise ValueError(f"Cannot start task: Another task '{active_task.title}' is already active")
+
             task.actual_start_time = datetime.now()
-            self.db.commit()
-            logger.info(f"Started task ID={task.id}: '{task.title}'")
+
+            try:
+                self.db.commit()
+                logger.info(f"Started task ID={task.id}: '{task.title}'")
+            except IntegrityError:
+                self.db.rollback()
+                # Re-check for active task after rollback
+                active_task = self.get_active()
+                if active_task:
+                    raise ValueError(f"Cannot start task: Another task '{active_task.title}' is already active")
+                else:
+                    raise ValueError(f"Cannot start task: Database constraint violation")
         return task
 
     def stop_task(self, task: Task) -> Task:
         """Stop a task by clearing actual_start_time"""
-        self.db.refresh(task)
+        try:
+            self.db.refresh(task)
+        except InvalidRequestError:
+            raise ValueError(f"Cannot stop task: Task was deleted by another process")
 
         # Validate task state
         if task.completed:
@@ -92,7 +110,10 @@ class TaskRepository:
 
     def complete_task(self, task: Task) -> Task:
         """Mark task as completed"""
-        self.db.refresh(task)
+        try:
+            self.db.refresh(task)
+        except InvalidRequestError:
+            raise ValueError(f"Cannot complete task: Task was deleted by another process")
 
         # Validate task state
         if not task.actual_start_time:

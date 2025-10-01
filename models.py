@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Float, Text, Index
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Float, Text, Index, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime
 
@@ -11,6 +11,9 @@ class Task(Base):
         Index('ix_tasks_scheduled_start', 'scheduled_start_time'),
         Index('ix_tasks_needs_scheduling', 'needs_scheduling'),
         Index('ix_tasks_actual_start', 'actual_start_time'),
+        Index('ix_tasks_active_unique', 'id', unique=True,
+              sqlite_where=text('actual_start_time IS NOT NULL AND completed = 0'),
+              postgresql_where=text('actual_start_time IS NOT NULL AND completed = false')),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -64,7 +67,11 @@ class ChatMessage(Base):
 
 from config import settings
 
-engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
+# Determine database type and set appropriate connect_args
+is_sqlite = settings.database_url.startswith('sqlite')
+connect_args = {"check_same_thread": False} if is_sqlite else {}
+
+engine = create_engine(settings.database_url, connect_args=connect_args)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 def get_db():
