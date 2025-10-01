@@ -53,7 +53,7 @@ class PrioritizerModule(dspy.Module):
 def _serialize_schedule(existing_schedule):
     """Serialize schedule for logging - converts ScheduledTask objects to dicts"""
     return [
-        s.dict() if hasattr(s, 'dict') else {
+        s.model_dump() if hasattr(s, 'model_dump') else {
             'id': s.id,
             'title': s.title,
             'start_time': s.start_time,

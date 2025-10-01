@@ -11,7 +11,7 @@
     <div class="gantt-container" style="overflow-x: auto; margin-top: 20px;">
         <div style="min-width: 800px;">
             {% for task in tasks %}
-                {% if task.start_time and task.end_time %}
+                {% if task.scheduled_start_time and task.scheduled_end_time %}
                 {% include 'gantt_item.html' %}
                 {% endif %}
             {% endfor %}

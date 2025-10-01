@@ -36,14 +36,15 @@ class TestTaskOperations:
         page.click('button[type="submit"]')
 
         # Wait for "Task added" toast to disappear
-        page.wait_for_timeout(2500)
+        page.wait_for_timeout(3000)
 
         start_button = page.locator('button:has-text("Start")').first
         start_button.click()
 
-        toast = page.locator(".toast")
+        # Wait for new toast to appear
+        page.wait_for_timeout(500)
+        toast = page.locator(".toast:has-text('Task started')").last
         expect(toast).to_be_visible(timeout=5000)
-        expect(toast).to_contain_text("Task started")
         expect(page.locator(".task")).to_contain_text("Started:")
 
     def test_complete_task_with_toast(self, page: Page):
@@ -53,14 +54,15 @@ class TestTaskOperations:
         page.click('button[type="submit"]')
 
         # Wait for "Task added" toast to disappear
-        page.wait_for_timeout(2500)
+        page.wait_for_timeout(3000)
 
         complete_button = page.locator('button:has-text("Complete")').first
         complete_button.click()
 
-        toast = page.locator(".toast")
+        # Wait for new toast to appear
+        page.wait_for_timeout(500)
+        toast = page.locator(".toast:has-text('Task completed')").last
         expect(toast).to_be_visible(timeout=5000)
-        expect(toast).to_contain_text("Task completed")
         expect(page.locator(".task.completed")).to_be_visible()
 
     def test_delete_task_with_toast(self, page: Page):
@@ -70,15 +72,16 @@ class TestTaskOperations:
         page.click('button[type="submit"]')
 
         # Wait for "Task added" toast to disappear
-        page.wait_for_timeout(2500)
+        page.wait_for_timeout(3000)
 
         initial_count = page.locator(".task").count()
         delete_button = page.locator('button:has-text("Delete")').first
         delete_button.click()
 
-        toast = page.locator(".toast")
+        # Wait for new toast to appear
+        page.wait_for_timeout(500)
+        toast = page.locator(".toast:has-text('Task deleted')").last
         expect(toast).to_be_visible(timeout=5000)
-        expect(toast).to_contain_text("Task deleted")
 
         page.wait_for_timeout(500)
         final_count = page.locator(".task").count()
